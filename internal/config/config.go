@@ -1,0 +1,136 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/joho/godotenv"
+	"github.com/kelseyhightower/envconfig"
+)
+
+type Config struct {
+	Server   ServerConfig
+	Database DatabaseConfig
+	Redis    RedisConfig
+	Storage  StorageConfig
+	Logging  LoggingConfig
+}
+
+type ServerConfig struct {
+	Port            int           `envconfig:"PORT" default:"8080"`
+	Host            string        `envconfig:"HOST" default:"0.0.0.0"`
+	ReadTimeout     time.Duration `envconfig:"READ_TIMEOUT" default:"10s"`
+	WriteTimeout    time.Duration `envconfig:"WRITE_TIMEOUT" default:"10s"`
+	IdleTimeout     time.Duration `envconfig:"IDLE_TIMEOUT" default:"120s"`
+	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"30s"`
+}
+
+type DatabaseConfig struct {
+	Host     string `envconfig:"DB_HOST" required:"true"`
+	Port     int    `envconfig:"DB_PORT" default:"5432"`
+	User     string `envconfig:"DB_USER" required:"true"`
+	Password string `envconfig:"DB_PASSWORD" required:"true"`
+	Database string `envconfig:"DB_NAME" required:"true"`
+	SSLMode  string `envconfig:"DB_SSL_MODE" default:"require"`
+	MaxConns int    `envconfig:"DB_MAX_CONNS" default:"20"`
+	MaxIdle  int    `envconfig:"DB_MAX_IDLE" default:"10"`
+}
+
+func (dc DatabaseConfig) ConnectionString() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		dc.User, dc.Password, dc.Host, dc.Port, dc.Database, dc.SSLMode)
+}
+
+type RedisConfig struct {
+	Host     string `envconfig:"REDIS_HOST" required:"true"`
+	Port     int    `envconfig:"REDIS_PORT" default:"6379"`
+	Password string `envconfig:"REDIS_PASSWORD"`
+	Database int    `envconfig:"REDIS_DB" default:"0"`
+}
+
+func (rc RedisConfig) Address() string {
+	return fmt.Sprintf("%s:%d", rc.Host, rc.Port)
+}
+
+type StorageConfig struct {
+	UploadDir   string `envconfig:"UPLOAD_DIR" required:"true"`
+	ResultDir   string `envconfig:"RESULT_DIR" required:"true"`
+	MaxFileSize int64  `envconfig:"MAX_FILE_SIZE" default:"10485760"` // 10MB
+}
+
+type LoggingConfig struct {
+	Level  string `envconfig:"LOG_LEVEL" default:"info"`
+	Format string `envconfig:"LOG_FORMAT" default:"json"`
+}
+
+func Load() (*Config, error) {
+	// Try to load .env file for local development (ignore if not found)
+	if _, err := os.Stat(".env"); err == nil {
+		if err := godotenv.Load(".env"); err != nil {
+			return nil, fmt.Errorf("failed to load .env file: %w", err)
+		}
+	}
+
+	var config Config
+
+	if err := envconfig.Process("", &config); err != nil {
+		return nil, fmt.Errorf("failed to process environment variables: %w", err)
+	}
+
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
+
+	return &config, nil
+}
+
+func (c *Config) Validate() error {
+	// Port validation
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		return fmt.Errorf("invalid server port: %d", c.Server.Port)
+	}
+
+	// Database port validation
+	if c.Database.Port <= 0 || c.Database.Port > 65535 {
+		return fmt.Errorf("invalid database port: %d", c.Database.Port)
+	}
+
+	// Redis port validation  
+	if c.Redis.Port <= 0 || c.Redis.Port > 65535 {
+		return fmt.Errorf("invalid redis port: %d", c.Redis.Port)
+	}
+
+	// Storage validation
+	if c.Storage.MaxFileSize <= 0 {
+		return fmt.Errorf("max file size must be positive")
+	}
+
+	// SSL mode validation
+	validSSLModes := []string{"disable", "require", "verify-ca", "verify-full"}
+	if !contains(validSSLModes, c.Database.SSLMode) {
+		return fmt.Errorf("invalid SSL mode: %s", c.Database.SSLMode)
+	}
+
+	// Logging validation
+	validLogLevels := []string{"debug", "info", "warn", "error"}
+	if !contains(validLogLevels, c.Logging.Level) {
+		return fmt.Errorf("invalid log level: %s", c.Logging.Level)
+	}
+
+	validLogFormats := []string{"json", "text"}
+	if !contains(validLogFormats, c.Logging.Format) {
+		return fmt.Errorf("invalid log format: %s", c.Logging.Format)
+	}
+
+	return nil
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}

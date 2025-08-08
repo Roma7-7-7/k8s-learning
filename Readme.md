@@ -241,6 +241,160 @@ text-processing-queue/
 ```
 
 
+## Implementation Status
+
+### ✅ Completed Components
+- **API Service (`text-api`)**: Full REST API implementation with:
+  - Job submission and status endpoints (`POST /api/v1/jobs`, `GET /api/v1/jobs/{id}`)
+  - File upload handling with validation
+  - PostgreSQL integration with golang-migrate
+  - Redis queue integration
+  - Health checks (`/health`, `/ready`, `/stats`)
+  - Structured logging with slog
+  - Environment-based configuration with envconfig
+  - Automatic database migrations on startup
+  - Comprehensive middleware (CORS, security, logging)
+  - Graceful shutdown handling
+
+### 🚧 In Progress
+- Worker Service (`text-worker`)
+- Controller (`text-controller`)
+- Web UI (`text-ui`)
+- Kubernetes manifests
+- Docker images
+
+### 📋 Pending
+- Database and Redis StatefulSets
+- Helm charts
+- CI/CD pipeline
+- Monitoring and observability
+
+## API Endpoints
+
+### Job Management
+- `POST /api/v1/jobs` - Submit text processing job with file upload
+- `GET /api/v1/jobs/{id}` - Get job status and details
+- `GET /api/v1/jobs` - List jobs with pagination
+- `GET /api/v1/jobs/{id}/result` - Download processed result file
+
+### Health & Monitoring
+- `GET /health` - Basic health check
+- `GET /ready` - Readiness probe (checks DB and Redis connectivity)
+- `GET /stats` - Queue statistics and job counts
+
+### Supported Processing Types
+- `wordcount` - Count total words in text
+- `linecount` - Count total lines in text
+- `uppercase` - Convert text to uppercase
+- `lowercase` - Convert text to lowercase
+- `replace` - Find and replace text patterns
+- `extract` - Extract lines containing specific patterns
+
+## Configuration
+
+The application uses environment variables for configuration with production-oriented defaults. **Required** configuration values must be set before deployment.
+
+### Server Configuration
+- `PORT=8080` - HTTP server port
+- `HOST=0.0.0.0` - HTTP server bind address
+- `READ_TIMEOUT=10s` - HTTP read timeout
+- `WRITE_TIMEOUT=10s` - HTTP write timeout
+- `IDLE_TIMEOUT=120s` - HTTP idle timeout
+- `SHUTDOWN_TIMEOUT=30s` - Graceful shutdown timeout
+
+### Database Configuration (**Required Values**)
+- `DB_HOST` - **REQUIRED** PostgreSQL host
+- `DB_PORT=5432` - PostgreSQL port
+- `DB_USER` - **REQUIRED** PostgreSQL username
+- `DB_PASSWORD` - **REQUIRED** PostgreSQL password
+- `DB_NAME` - **REQUIRED** PostgreSQL database name
+- `DB_SSL_MODE=require` - PostgreSQL SSL mode (require, verify-ca, verify-full, disable)
+- `DB_MAX_CONNS=20` - Maximum database connections
+- `DB_MAX_IDLE=10` - Maximum idle database connections
+
+### Redis Configuration (**Required Values**)
+- `REDIS_HOST` - **REQUIRED** Redis host
+- `REDIS_PORT=6379` - Redis port
+- `REDIS_PASSWORD` - Redis password (optional but recommended)
+- `REDIS_DB=0` - Redis database number
+
+### Storage Configuration (**Required Values**)
+- `UPLOAD_DIR` - **REQUIRED** Directory for uploaded files
+- `RESULT_DIR` - **REQUIRED** Directory for processed results
+- `MAX_FILE_SIZE=10485760` - Maximum file size in bytes (10MB)
+
+### Logging Configuration
+- `LOG_LEVEL=info` - Log level (debug, info, warn, error)
+- `LOG_FORMAT=json` - Log format (json, text)
+
+### Local Development Setup
+
+For local development, you can use a `.env` file:
+
+**Quick Setup:**
+```bash
+make setup-dev
+```
+
+**Manual Setup:**
+1. **Copy the template**: `cp .env.distro .env`
+2. **Edit the values**: Update `.env` with your local database and Redis settings
+3. **Create directories**: `mkdir -p uploads results`
+4. **Run the service**: `make run-api`
+
+The application will automatically load `.env` if present.
+
+**Important**: Never commit `.env` files to version control (already in `.gitignore`)
+
+### Production Deployment Notes
+- **SSL/TLS**: Database connections use SSL by default (`DB_SSL_MODE=require`)
+- **Secrets**: All sensitive values (passwords, hosts) must be explicitly configured
+- **Storage**: File storage paths must be explicitly set to prevent default directory usage  
+- **Timeouts**: Conservative HTTP timeouts (10s) prevent resource exhaustion
+- **Environment Variables**: Use Kubernetes Secrets/ConfigMaps instead of .env files
+
+## Database Migrations
+
+Migrations are stored as SQL files in the `migrations/` directory using golang-migrate naming convention:
+```
+000001_description.up.sql    # Forward migration
+000001_description.down.sql  # Rollback migration
+```
+
+### Migration Workflow
+1. Create new migration files: `migrations/000002_add_user_table.up.sql` and `migrations/000002_add_user_table.down.sql`
+2. Write forward migration in `.up.sql` and rollback in `.down.sql`
+3. Restart the API service to apply pending migrations automatically
+4. Migrations are tracked in the `schema_migrations` table by golang-migrate
+
+### Important Notes
+- Migrations run automatically when the API service starts using golang-migrate library
+- Only the API service accesses the database directly
+- Full rollback support with `.down.sql` files
+- Migration history is preserved and managed by golang-migrate
+
+## Graceful Shutdown
+
+The API service implements comprehensive graceful shutdown to handle Kubernetes pod termination:
+
+### Signal Handling
+- `SIGTERM`: Standard Kubernetes pod termination signal
+- `SIGINT`: Local development interrupt (Ctrl+C)
+- `SIGQUIT`: Emergency shutdown signal
+
+### Shutdown Sequence
+1. **Signal Reception**: Server receives termination signal and sets shutdown flag
+2. **Traffic Rejection**: New non-health-check requests are rejected with 503 status
+3. **Readiness Failure**: `/ready` endpoint returns 503 to stop Kubernetes traffic routing
+4. **Connection Draining**: Existing HTTP connections are gracefully closed
+5. **Resource Cleanup**: Database and Redis connections are closed
+6. **Complete Shutdown**: Process exits cleanly
+
+### Configuration
+- `SHUTDOWN_TIMEOUT`: Maximum time to wait for graceful shutdown (default: 30s)
+- Health checks (`/health`, `/ready`) remain available during shutdown
+- Kubernetes should configure `terminationGracePeriodSeconds` >= `SHUTDOWN_TIMEOUT`
+
 ## Build Commands
 
 ### Development

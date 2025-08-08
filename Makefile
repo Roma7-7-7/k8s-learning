@@ -27,7 +27,7 @@ IMAGE_TAG=latest
 all: fmt test build
 
 # Build all binaries
-build: build-api build-worker build-controller
+build: build-api
 
 # Build individual components
 build-api:
@@ -123,6 +123,25 @@ generate-crds:
 	@which controller-gen > /dev/null || (echo "controller-gen not found, install with: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest" && exit 1)
 	controller-gen crd paths=./internal/models/... output:crd:artifacts:config=deployments/base/controller/
 
+# Local development setup
+setup-dev:
+	@echo "Setting up local development environment..."
+	@if [ ! -f .env ]; then \
+		echo "Creating .env file from template..."; \
+		cp .env.distro .env; \
+		echo "✓ Created .env file"; \
+		echo "⚠ Please edit .env with your local database and Redis settings"; \
+	else \
+		echo "✓ .env file already exists"; \
+	fi
+	@mkdir -p uploads results
+	@echo "✓ Created upload and result directories"
+	@echo ""
+	@echo "Next steps:"
+	@echo "1. Edit .env file with your database and Redis connection details"
+	@echo "2. Start PostgreSQL and Redis services"
+	@echo "3. Run: make run-api"
+
 # Help
 help:
 	@echo "Available targets:"
@@ -144,5 +163,6 @@ help:
 	@echo "  run-api          - Build and run API service"
 	@echo "  run-worker       - Build and run worker service"
 	@echo "  run-controller   - Build and run controller service"
+	@echo "  setup-dev        - Setup local development environment (.env file and directories)"
 	@echo "  generate-crds    - Generate CRD manifests"
 	@echo "  help             - Show this help message"
