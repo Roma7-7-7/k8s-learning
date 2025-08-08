@@ -11,19 +11,9 @@
 
 ### Error Handling
 - Always handle errors explicitly - never ignore them
-- Use wrapped errors with `fmt.Errorf("operation failed: %w", err)` for context
+- Use wrapped errors with `fmt.Errorf("operation: %w", err)` for context
 - Return errors as the last return value
 - Prefer custom error types for domain-specific errors
-
-### Project Structure
-```
-cmd/          - Main applications
-internal/     - Private application code
-pkg/          - Public library code  
-api/          - API definitions (OpenAPI, protobuf)
-configs/      - Configuration files
-scripts/      - Build and deployment scripts
-```
 
 ### Dependencies
 - Prefer standard library when possible
@@ -34,6 +24,7 @@ scripts/      - Build and deployment scripts
 ### Testing
 - Write table-driven tests when testing multiple scenarios
 - Use testify/assert for test assertions
+- Use gomock for mocking dependencies in tests
 - Mock external dependencies using interfaces
 - Aim for >80% test coverage on business logic
 - Place tests in `*_test.go` files in the same package
@@ -46,7 +37,7 @@ scripts/      - Build and deployment scripts
 - Prefer composition over inheritance
 
 ### Logging
-- Use structured logging (logrus or zap)
+- Use structured logging with Go's slog package
 - Log at appropriate levels (Debug, Info, Warn, Error)
 - Include relevant context in log messages
 - Don't log and return errors - choose one
@@ -54,7 +45,6 @@ scripts/      - Build and deployment scripts
 ### Performance
 - Use benchmarks for performance-critical code
 - Profile before optimizing
-- Prefer sync.Pool for object reuse when appropriate
 - Use buffered channels when you know the capacity
 
 ## Project-Specific Rules
@@ -94,10 +84,9 @@ scripts/      - Build and deployment scripts
 - Set appropriate readiness and liveness probes
 
 ### Configuration
-- Keep container images lightweight (use Alpine or distroless)
+- Keep container images lightweight (use Alpine)
 - Use multi-stage builds for Go applications
 - Don't run containers as root user
-- Use specific image tags, never `:latest` in production
 - Group related resources in the same namespace
 
 ### Services & Networking
@@ -131,7 +120,6 @@ scripts/      - Build and deployment scripts
 
 ### CSS
 - Use modern CSS features (Grid, Flexbox, CSS variables)
-- Mobile-first responsive design
 - Avoid CSS frameworks - write custom minimal CSS
 - Use CSS custom properties for theming
 - Keep styles in a single CSS file when possible
@@ -145,22 +133,8 @@ scripts/      - Build and deployment scripts
 
 ### CDN Dependencies (if absolutely needed)
 - Prefer these lightweight options:
-    - htmx for AJAX interactions
     - Tailwind CSS (via CDN) if styling gets complex
-    - Chart.js for simple charts
     - Always specify version numbers in CDN URLs
-
-### File Structure
-```
-web/
-├── index.html
-├── css/
-│   └── style.css
-├── js/
-│   └── app.js
-└── assets/
-    └── images/
-```
 
 ### API Integration
 - Use JSON for data exchange

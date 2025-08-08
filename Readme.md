@@ -15,7 +15,6 @@ A cloud-native text processing system built with Go and deployed on Kubernetes. 
 - Text file upload handling with validation
 - Job metadata storage in PostgreSQL
 - Redis queue integration for task publishing
-- Simple authentication (optional enhancement)
 
 **Dependencies**:
 - PostgreSQL (job metadata)
@@ -76,7 +75,7 @@ A cloud-native text processing system built with Go and deployed on Kubernetes. 
 - ClusterRole and ClusterRoleBinding
 
 ### 4. Web UI (`text-ui`)
-**Language**: HTML/CSS/JavaScript (or React)  
+**Language**: HTML/CSS/JavaScript 
 **Type**: Static web application  
 **Purpose**: User interface for job submission and monitoring
 
@@ -92,7 +91,6 @@ A cloud-native text processing system built with Go and deployed on Kubernetes. 
 **Kubernetes Resources**:
 - Deployment
 - Service (ClusterIP)
-- ConfigMap (nginx configuration)
 
 ### 5. Database (`postgresql`)
 **Type**: PostgreSQL StatefulSet  
@@ -103,7 +101,6 @@ A cloud-native text processing system built with Go and deployed on Kubernetes. 
 -- Jobs table
 CREATE TABLE jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id VARCHAR(255),
     original_filename VARCHAR(255) NOT NULL,
     file_path VARCHAR(500) NOT NULL,
     processing_type VARCHAR(100) NOT NULL,
@@ -145,121 +142,6 @@ CREATE INDEX idx_jobs_created_at ON jobs(created_at);
 - PersistentVolumeClaim
 - Secret (Redis password)
 - ConfigMap (Redis configuration)
-
-## Custom Resource Definitions
-
-### TextProcessingJob CRD
-```yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: textprocessingjobs.textprocessing.example.com
-spec:
-  group: textprocessing.example.com
-  versions:
-  - name: v1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        properties:
-          spec:
-            type: object
-            properties:
-              jobId:
-                type: string
-              processingType:
-                type: string
-                enum: ["wordcount", "linecount", "uppercase", "lowercase", "replace", "extract"]
-              parameters:
-                type: object
-              priority:
-                type: integer
-                minimum: 1
-                maximum: 10
-          status:
-            type: object
-            properties:
-              phase:
-                type: string
-                enum: ["Pending", "Running", "Succeeded", "Failed"]
-              startTime:
-                type: string
-              completionTime:
-                type: string
-              workerId:
-                type: string
-  scope: Namespaced
-  names:
-    plural: textprocessingjobs
-    singular: textprocessingjob
-    kind: TextProcessingJob
-```
-
-## Security Configuration
-
-### Service Accounts & RBAC
-
-#### API Service Account
-```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: text-api
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: api-minimal
-rules:
-- apiGroups: [""]
-  resources: ["configmaps", "secrets"]
-  verbs: ["get", "list"]
-- apiGroups: ["textprocessing.example.com"]
-  resources: ["textprocessingjobs"]
-  verbs: ["create", "get", "list", "update", "patch"]
-```
-
-#### Worker Service Account
-```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: text-worker
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: worker-minimal
-rules:
-- apiGroups: [""]
-  resources: ["configmaps", "secrets"]
-  verbs: ["get", "list"]
-```
-
-#### Controller Service Account
-```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: text-controller
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: text-controller
-rules:
-- apiGroups: ["batch"]
-  resources: ["jobs"]
-  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
-- apiGroups: ["textprocessing.example.com"]
-  resources: ["textprocessingjobs"]
-  verbs: ["get", "list", "watch", "update", "patch"]
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["create"]
-```
 
 ## Directory Structure
 
@@ -358,80 +240,38 @@ text-processing-queue/
 }
 ```
 
-## Deployment Phases
 
-### Phase 1: Basic Services (Weeks 1-2)
-- Deploy API, Worker, Database, Redis
-- Basic image processing functionality
-- Simple queue-based task processing
+## Build Commands
 
-### Phase 2: Advanced K8s Features (Weeks 3-4)
-- Add health checks and probes
-- Implement proper RBAC
-- Add Helm charts
-- StatefulSet optimizations
+### Development
+- `make all` - Format, test, and build all components
+- `make fmt` - Format Go code with gofmt
+- `make test` - Run all tests
+- `make lint` - Run linter (requires golangci-lint)
+- `make deps` - Download and tidy dependencies
 
-### Phase 3: Custom Controller (Weeks 5-7)
-- Implement ImageProcessingJob CRD
-- Build controller with reconciliation
-- Auto-scaling based on queue metrics
+### Building
+- `make build` - Build all binaries (api, worker, controller)
+- `make build-api` - Build API service only
+- `make build-worker` - Build worker service only
+- `make build-controller` - Build controller service only
 
-### Phase 4: Observability (Weeks 8-9)
-- Add Prometheus metrics
-- Implement structured logging
-- Create monitoring dashboards
-- Distributed tracing setup
+### Running Services
+- `make run-api` - Build and run API service
+- `make run-worker` - Build and run worker service
+- `make run-controller` - Build and run controller service
 
-### Phase 5: Production Readiness (Week 10)
-- Security hardening
-- Performance optimization
-- Disaster recovery testing
-- Load testing and tuning
+### Docker
+- `make docker-build` - Build all Docker images
+- `make docker-push` - Push all Docker images
 
-## Key Learning Outcomes
+### Kubernetes
+- `make k8s-deploy` - Deploy to Kubernetes
+- `make k8s-delete` - Delete from Kubernetes
+- `make generate-crds` - Generate CRD manifests
 
-### Kubernetes Concepts Covered
-- Pod lifecycle and container management
-- Services and networking
-- Deployments and StatefulSets
-- Jobs and CronJobs
-- ConfigMaps and Secrets
-- Persistent Volumes
-- RBAC and security
-- Custom Resource Definitions
-- Controllers and operators
-- Horizontal Pod Autoscaling
-- Network Policies
+### Testing
+- `make test-coverage` - Run tests with coverage report
 
-### Go Skills Developed
-- REST API development
-- Background job processing
-- Kubernetes client-go library
-- Controller-runtime framework
-- Database integration
-- Redis integration
-- Error handling and logging
-- Testing strategies
-
-### DevOps Practices
-- Infrastructure as Code (Terraform)
-- CI/CD pipeline concepts
-- Container orchestration
-- Monitoring and observability
-- Security best practices
-- Disaster recovery planning
-
-## Success Metrics
-
-### Technical Metrics
-- API response time < 50ms
-- Job processing throughput > 100 texts/second
-- Worker auto-scaling latency < 30 seconds
-- System availability > 99.9%
-
-### Learning Metrics
-- Ability to explain Kubernetes architecture
-- Demonstrate controller pattern implementation
-- Troubleshoot common K8s issues
-- Implement security best practices
-- Design scalable microservices architecture
+### Cleanup
+- `make clean` - Clean build artifacts
