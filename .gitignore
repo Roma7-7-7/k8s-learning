@@ -28,6 +28,9 @@ vendor/
 # env file
 .env
 
+# HTTP client environment files (private)
+http-client.private.env.json
+
 # Editor/IDE
 .idea/
 .vscode/

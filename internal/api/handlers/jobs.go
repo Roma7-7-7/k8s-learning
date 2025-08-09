@@ -95,7 +95,7 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 		OriginalFilename: fileInfo.OriginalName,
 		FilePath:         fileInfo.StoredPath,
 		ProcessingType:   processingType,
-		Parameters:       parameters,
+		Parameters:       database.JSONB(parameters),
 		Status:           database.JobStatusPending,
 		CreatedAt:        time.Now(),
 	}
@@ -113,7 +113,7 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 		JobID:          job.ID,
 		FilePath:       job.FilePath,
 		ProcessingType: job.ProcessingType,
-		Parameters:     job.Parameters,
+		Parameters:     map[string]any(job.Parameters),
 		Priority:       1,
 	}
 

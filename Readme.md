@@ -405,7 +405,8 @@ This file contains pre-configured requests for all API endpoints with:
 2. **Start the API server**: Ensure your API is running on `localhost:8080`
 3. **Run requests**: Click the ▶️ button next to any request to execute it
 4. **File uploads**: The requests include embedded test content for file uploads
-5. **Variables**: Update `@baseUrl` and `@sampleJobId` as needed
+5. **Environment selection**: Choose "development" environment in the HTTP client toolbar
+6. **Override variables**: Use environment files to customize `@baseUrl` and `@sampleJobId`
 
 ### Key Features
 
@@ -441,6 +442,55 @@ wordcount
 ```
 
 The HTTP client provides a complete testing environment without requiring external tools like Postman or curl.
+
+### Environment Variable Management
+
+#### 1. Using Environment Files (Recommended)
+
+**Shared Configuration** (`http-client.env.json`):
+```json
+{
+  "development": {
+    "baseUrl": "http://localhost:8080",
+    "sampleJobId": "replace-with-actual-job-id"
+  },
+  "production": {
+    "baseUrl": "https://your-api.com",
+    "sampleJobId": "prod-job-id"
+  }
+}
+```
+
+**Private Overrides** (`http-client.private.env.json`):
+```json
+{
+  "development": {
+    "sampleJobId": "123e4567-e89b-12d3-a456-426614174000"
+  }
+}
+```
+
+#### 2. Alternative Methods
+
+**Option A: Direct Editing** - Temporarily edit variables in `api-tests.http`:
+```http
+@baseUrl = http://localhost:8080
+@sampleJobId = your-actual-job-id-here
+```
+
+**Option B: Environment Selection Dropdown** - Use the environment dropdown in the HTTP client toolbar to switch between `development`, `production`, etc.
+
+**Option C: Run Configuration Variables** - Set variables in the IDE's run configuration dialog.
+
+#### 3. Variable Override Priority
+1. **http-client.private.env.json** (highest priority, git-ignored)
+2. **http-client.env.json** (shared configuration)
+3. **Inline variables** in `.http` file (lowest priority)
+
+#### 4. Workflow Example
+1. Create a job: `POST /api/v1/jobs` → Copy job ID from response
+2. Update `http-client.private.env.json` with the real job ID
+3. Test job endpoints: `GET /api/v1/jobs/{id}` and `GET /api/v1/jobs/{id}/result`
 
 ## Build Commands
 

@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -13,6 +15,9 @@ import (
 type Repository struct {
 	db *sqlx.DB
 }
+
+// JSONB handles PostgreSQL JSONB columns by implementing sql.Scanner and driver.Valuer.
+type JSONB map[string]any
 
 func NewRepository(conf config.Database, logger *slog.Logger) (*Repository, error) {
 	ctx := context.Background()
@@ -50,4 +55,39 @@ func (r *Repository) HealthCheck(ctx context.Context) error {
 	defer cancel()
 
 	return r.db.PingContext(ctx)
+}
+
+// Scan implements the sql.Scanner interface for JSONB.
+func (j *JSONB) Scan(value interface{}) error {
+	if value == nil {
+		*j = make(JSONB)
+		return nil
+	}
+
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return fmt.Errorf("cannot scan %T into JSONB", value)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(bytes, &result); err != nil {
+		return fmt.Errorf("cannot unmarshal JSONB: %w", err)
+	}
+
+	*j = result
+	return nil
+}
+
+// Value implements the driver.Valuer interface for JSONB.
+func (j *JSONB) Value() (driver.Value, error) {
+	if j == nil {
+		return []byte("{}"), nil
+	}
+
+	return json.Marshal(*j)
 }

@@ -19,7 +19,7 @@ type (
 		OriginalFilename string         `json:"original_filename" db:"original_filename"`
 		FilePath         string         `json:"file_path" db:"file_path"`
 		ProcessingType   ProcessingType `json:"processing_type" db:"processing_type"`
-		Parameters       map[string]any `json:"parameters" db:"parameters"`
+		Parameters       JSONB          `json:"parameters" db:"parameters"`
 		Status           JobStatus      `json:"status" db:"status"`
 		ResultPath       string         `json:"result_path,omitempty" db:"result_path"`
 		ErrorMessage     string         `json:"error_message,omitempty" db:"error_message"`
@@ -98,8 +98,9 @@ func (r *Repository) GetJobs(ctx context.Context, req GetJobsFilter) ([]*Job, er
 
 	query := `
 		SELECT id, original_filename, file_path, processing_type, 
-			   parameters, status, result_path, error_message, 
-			   created_at, started_at, completed_at, worker_id
+			   parameters, status, COALESCE(result_path, '') as result_path, 
+			   COALESCE(error_message, '') as error_message, 
+			   created_at, started_at, completed_at, COALESCE(worker_id, '') as worker_id
 		FROM jobs 
 		ORDER BY created_at DESC 
 		LIMIT $1 OFFSET $2`
@@ -132,8 +133,9 @@ func (r *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*Job, error)
 	var job Job
 	query := `
 		SELECT id, original_filename, file_path, processing_type, 
-			   parameters, status, result_path, error_message, 
-			   created_at, started_at, completed_at, worker_id
+			   parameters, status, COALESCE(result_path, '') as result_path, 
+			   COALESCE(error_message, '') as error_message, 
+			   created_at, started_at, completed_at, COALESCE(worker_id, '') as worker_id
 		FROM jobs 
 		WHERE id = $1`
 
