@@ -3,62 +3,86 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
-	"github.com/rsav/k8s-learning/internal/models"
 )
 
-type JobStore struct {
-	db *sqlx.DB
-}
+type (
+	JobStatus      string
+	ProcessingType string
 
-func NewJobStore(db *sqlx.DB) *JobStore {
-	return &JobStore{db: db}
-}
-
-func (js *JobStore) Create(ctx context.Context, job *models.Job) error {
-	query := `
-		INSERT INTO jobs (
-			id, original_filename, file_path, processing_type, 
-			parameters, status, created_at
-		) VALUES (
-			:id, :original_filename, :file_path, :processing_type, 
-			:parameters, :status, :created_at
-		)`
-
-	_, err := js.db.NamedExecContext(ctx, query, job)
-	if err != nil {
-		return fmt.Errorf("failed to create job: %w", err)
+	Job struct {
+		ID               uuid.UUID      `json:"id" db:"id"`
+		OriginalFilename string         `json:"original_filename" db:"original_filename"`
+		FilePath         string         `json:"file_path" db:"file_path"`
+		ProcessingType   ProcessingType `json:"processing_type" db:"processing_type"`
+		Parameters       map[string]any `json:"parameters" db:"parameters"`
+		Status           JobStatus      `json:"status" db:"status"`
+		ResultPath       string         `json:"result_path,omitempty" db:"result_path"`
+		ErrorMessage     string         `json:"error_message,omitempty" db:"error_message"`
+		CreatedAt        time.Time      `json:"created_at" db:"created_at"`
+		StartedAt        *time.Time     `json:"started_at,omitempty" db:"started_at"`
+		CompletedAt      *time.Time     `json:"completed_at,omitempty" db:"completed_at"`
+		WorkerID         string         `json:"worker_id,omitempty" db:"worker_id"`
 	}
+)
 
-	return nil
+const (
+	ProcessingTypeWordCount ProcessingType = "wordcount"
+	ProcessingTypeLineCount ProcessingType = "linecount"
+	ProcessingTypeUppercase ProcessingType = "uppercase"
+	ProcessingTypeLowercase ProcessingType = "lowercase"
+	ProcessingTypeReplace   ProcessingType = "replace"
+	ProcessingTypeExtract   ProcessingType = "extract"
+)
+
+func (p ProcessingType) String() string {
+	return string(p)
 }
 
-func (js *JobStore) GetByID(ctx context.Context, id uuid.UUID) (*models.Job, error) {
-	var job models.Job
-	query := `
-		SELECT id, original_filename, file_path, processing_type, 
-			   parameters, status, result_path, error_message, 
-			   created_at, started_at, completed_at, worker_id
-		FROM jobs 
-		WHERE id = $1`
+var ProcessingTypes = map[string]ProcessingType{
+	ProcessingTypeWordCount.String(): ProcessingTypeWordCount,
+	ProcessingTypeLineCount.String(): ProcessingTypeLineCount,
+	ProcessingTypeUppercase.String(): ProcessingTypeUppercase,
+	ProcessingTypeLowercase.String(): ProcessingTypeLowercase,
+	ProcessingTypeReplace.String():   ProcessingTypeReplace,
+	ProcessingTypeExtract.String():   ProcessingTypeExtract,
+}
 
-	err := js.db.GetContext(ctx, &job, query, id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("job not found: %s", id)
-		}
-		return nil, fmt.Errorf("failed to get job: %w", err)
+const (
+	JobStatusPending   JobStatus = "pending"
+	JobStatusRunning   JobStatus = "running"
+	JobStatusSucceeded JobStatus = "succeeded"
+	JobStatusFailed    JobStatus = "failed"
+)
+
+func (s JobStatus) String() string {
+	return string(s)
+}
+
+var JobStatuses = map[string]JobStatus{
+	JobStatusPending.String():   JobStatusPending,
+	JobStatusRunning.String():   JobStatusRunning,
+	JobStatusSucceeded.String(): JobStatusSucceeded,
+	JobStatusFailed.String():    JobStatusFailed,
+}
+
+type GetJobsFilter struct {
+	Status JobStatus
+	Limit  int
+	Offset int
+}
+
+func (r *Repository) GetJobs(ctx context.Context, req GetJobsFilter) ([]*Job, error) {
+	if req.Limit <= 0 {
+		req.Limit = 100 // Default limit
 	}
-
-	return &job, nil
-}
-
-func (js *JobStore) List(ctx context.Context, req models.ListJobsRequest) ([]*models.Job, error) {
-	req.SetDefaults()
+	if req.Offset < 0 {
+		req.Offset = 0 // Default offset
+	}
 
 	query := `
 		SELECT id, original_filename, file_path, processing_type, 
@@ -70,17 +94,17 @@ func (js *JobStore) List(ctx context.Context, req models.ListJobsRequest) ([]*mo
 
 	args := []interface{}{req.Limit, req.Offset}
 
-	rows, err := js.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list jobs: %w", err)
+		return nil, fmt.Errorf("list jobs: %w", err)
 	}
-	defer rows.Close()
+	defer closeQuietly(rows)
 
-	var jobs []*models.Job
+	var jobs []*Job
 	for rows.Next() {
-		var job models.Job
+		var job Job
 		if err := rows.StructScan(&job); err != nil {
-			return nil, fmt.Errorf("failed to scan job: %w", err)
+			return nil, fmt.Errorf("scan job: %w", err)
 		}
 		jobs = append(jobs, &job)
 	}
@@ -92,19 +116,81 @@ func (js *JobStore) List(ctx context.Context, req models.ListJobsRequest) ([]*mo
 	return jobs, nil
 }
 
-func (js *JobStore) UpdateStatus(ctx context.Context, id uuid.UUID, status models.JobStatus, workerID *string) error {
+func (r *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*Job, error) {
+	var job Job
+	query := `
+		SELECT id, original_filename, file_path, processing_type, 
+			   parameters, status, result_path, error_message, 
+			   created_at, started_at, completed_at, worker_id
+		FROM jobs 
+		WHERE id = $1`
+
+	err := r.db.GetContext(ctx, &job, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("job not found: %s", id)
+		}
+		return nil, fmt.Errorf("get job: %w", err)
+	}
+
+	return &job, nil
+}
+
+func (r *Repository) CountJobs(ctx context.Context) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM jobs`
+
+	err := r.db.GetContext(ctx, &count, query)
+	if err != nil {
+		return 0, fmt.Errorf("count jobs: %w", err)
+	}
+
+	return count, nil
+}
+
+func (r *Repository) CountJobsByStatus(ctx context.Context, status JobStatus) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM jobs WHERE status = $1`
+
+	err := r.db.GetContext(ctx, &count, query, status)
+	if err != nil {
+		return 0, fmt.Errorf("count jobs by status: %w", err)
+	}
+
+	return count, nil
+}
+
+func (r *Repository) CreateJob(ctx context.Context, job *Job) error {
+	query := `
+		INSERT INTO jobs (
+			id, original_filename, file_path, processing_type, 
+			parameters, status, created_at
+		) VALUES (
+			:id, :original_filename, :file_path, :processing_type, 
+			:parameters, :status, :created_at
+		)`
+
+	_, err := r.db.NamedExecContext(ctx, query, job)
+	if err != nil {
+		return fmt.Errorf("create job: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) UpdateStatus(ctx context.Context, id uuid.UUID, status JobStatus, workerID *string) error {
 	now := time.Now()
 	var query string
 	var args []interface{}
 
 	switch status {
-	case models.JobStatusRunning:
+	case JobStatusRunning:
 		query = `
 			UPDATE jobs 
 			SET status = $1, started_at = $2, worker_id = $3
 			WHERE id = $4`
 		args = []interface{}{status, now, workerID, id}
-	case models.JobStatusSucceeded, models.JobStatusFailed:
+	case JobStatusSucceeded, JobStatusFailed:
 		query = `
 			UPDATE jobs 
 			SET status = $1, completed_at = $2
@@ -118,14 +204,14 @@ func (js *JobStore) UpdateStatus(ctx context.Context, id uuid.UUID, status model
 		args = []interface{}{status, id}
 	}
 
-	result, err := js.db.ExecContext(ctx, query, args...)
+	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("failed to update job status: %w", err)
+		return fmt.Errorf("update job status: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return fmt.Errorf("get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
@@ -135,20 +221,20 @@ func (js *JobStore) UpdateStatus(ctx context.Context, id uuid.UUID, status model
 	return nil
 }
 
-func (js *JobStore) UpdateResult(ctx context.Context, id uuid.UUID, resultPath string) error {
+func (r *Repository) UpdateResult(ctx context.Context, id uuid.UUID, resultPath string) error {
 	query := `
 		UPDATE jobs 
 		SET result_path = $1, status = $2, completed_at = $3
 		WHERE id = $4`
 
-	result, err := js.db.ExecContext(ctx, query, resultPath, models.JobStatusSucceeded, time.Now(), id)
+	result, err := r.db.ExecContext(ctx, query, resultPath, JobStatusSucceeded, time.Now(), id)
 	if err != nil {
-		return fmt.Errorf("failed to update job result: %w", err)
+		return fmt.Errorf("update job result: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return fmt.Errorf("get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
@@ -158,20 +244,20 @@ func (js *JobStore) UpdateResult(ctx context.Context, id uuid.UUID, resultPath s
 	return nil
 }
 
-func (js *JobStore) UpdateError(ctx context.Context, id uuid.UUID, errorMessage string) error {
+func (r *Repository) UpdateError(ctx context.Context, id uuid.UUID, errorMessage string) error {
 	query := `
 		UPDATE jobs 
 		SET error_message = $1, status = $2, completed_at = $3
 		WHERE id = $4`
 
-	result, err := js.db.ExecContext(ctx, query, errorMessage, models.JobStatusFailed, time.Now(), id)
+	result, err := r.db.ExecContext(ctx, query, errorMessage, JobStatusFailed, time.Now(), id)
 	if err != nil {
-		return fmt.Errorf("failed to update job error: %w", err)
+		return fmt.Errorf("update job error: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return fmt.Errorf("get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
@@ -179,28 +265,4 @@ func (js *JobStore) UpdateError(ctx context.Context, id uuid.UUID, errorMessage 
 	}
 
 	return nil
-}
-
-func (js *JobStore) Count(ctx context.Context) (int, error) {
-	var count int
-	query := `SELECT COUNT(*) FROM jobs`
-
-	err := js.db.GetContext(ctx, &count, query)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count jobs: %w", err)
-	}
-
-	return count, nil
-}
-
-func (js *JobStore) CountByStatus(ctx context.Context, status models.JobStatus) (int, error) {
-	var count int
-	query := `SELECT COUNT(*) FROM jobs WHERE status = $1`
-
-	err := js.db.GetContext(ctx, &count, query, status)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count jobs by status: %w", err)
-	}
-
-	return count, nil
 }

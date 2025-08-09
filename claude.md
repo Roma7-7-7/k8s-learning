@@ -8,12 +8,15 @@
 - Prefer short, descriptive names for local variables
 - Use PascalCase for exported functions/types, camelCase for unexported
 - Keep functions small and focused on a single responsibility
+- Don't add package name to struct name (e.g., `User` instead of `UserModel` or `ModelUser` if part of `model` package)
 
 ### Error Handling
 - Always handle errors explicitly - never ignore them
 - Use wrapped errors with `fmt.Errorf("operation: %w", err)` for context
+- Do not use `fmt.Errorf("failed to do something: %v", err)` - prefer simple `fmt.Errorf("to do something: %w", err)`
 - Return errors as the last return value
 - Prefer custom error types for domain-specific errors
+- Use `errors.Is` and `errors.As` for error checking
 
 ### Dependencies
 - Prefer standard library when possible

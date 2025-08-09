@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -20,51 +21,51 @@ import (
 )
 
 type Server struct {
-	config     *config.Config
-	db         *database.DB
+	config     *config.API
+	repo       *database.Repository
 	queue      *queue.RedisQueue
 	fileStore  *filestore.FileStore
-	logger     *slog.Logger
+	log        *slog.Logger
 	httpServer *http.Server
 	// Atomic flag to indicate if server is shutting down
 	// 0 = running, 1 = shutting down
 	shuttingDown int32
 }
 
-func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
+func NewServer(cfg *config.API, log *slog.Logger) (*Server, error) {
 	ctx := context.Background()
 
-	logger.DebugContext(ctx, "Initializing database connection")
-	db, err := database.NewDB(cfg.Database, logger)
+	log.DebugContext(ctx, "Initializing database connection")
+	repo, err := database.NewRepository(cfg.Database, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %w", err)
+		return nil, fmt.Errorf("initialize database: %w", err)
 	}
 
-	logger.DebugContext(ctx, "Initializing Redis queue connection")
-	queue, err := queue.NewRedisQueue(cfg.Redis, logger)
+	log.DebugContext(ctx, "Initializing Redis queue connection")
+	q, err := queue.NewRedisQueue(cfg.Redis, log)
 	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to initialize Redis queue: %w", err)
+		_ = repo.Close()
+		return nil, fmt.Errorf("initialize Redis queue: %w", err)
 	}
 
-	logger.DebugContext(ctx, "Initializing file store", "upload_dir", cfg.Storage.UploadDir, "result_dir", cfg.Storage.ResultDir, "max_file_size", cfg.Storage.MaxFileSize)
+	log.DebugContext(ctx, "Initializing file store", "upload_dir", cfg.Storage.UploadDir, "result_dir", cfg.Storage.ResultDir, "max_file_size", cfg.Storage.MaxFileSize)
 	fileStore, err := filestore.NewFileStore(
 		cfg.Storage.UploadDir,
 		cfg.Storage.ResultDir,
 		cfg.Storage.MaxFileSize,
 	)
 	if err != nil {
-		db.Close()
-		queue.Close()
-		return nil, fmt.Errorf("failed to initialize file store: %w", err)
+		_ = repo.Close()
+		_ = q.Close()
+		return nil, fmt.Errorf("initialize file store: %w", err)
 	}
 
 	server := &Server{
 		config:    cfg,
-		db:        db,
-		queue:     queue,
+		repo:      repo,
+		queue:     q,
 		fileStore: fileStore,
-		logger:    logger,
+		log:       log,
 	}
 
 	server.setupRoutes()
@@ -75,8 +76,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 func (s *Server) setupRoutes() {
 	mux := http.NewServeMux()
 
-	jobHandler := handlers.NewJobHandler(s.db, s.queue, s.fileStore, s.logger)
-	healthHandler := handlers.NewHealthHandler(s.db, s.queue, s.logger, s.IsShuttingDown)
+	jobHandler := handlers.NewJob(s.repo, s.queue, s.fileStore, s.log)
+	healthHandler := handlers.NewHealth(s.repo, s.queue, s.log)
 
 	mux.HandleFunc("/api/v1/jobs", jobHandler.CreateJob)
 	mux.HandleFunc("/api/v1/jobs/", s.routeJobRequests(jobHandler))
@@ -85,13 +86,12 @@ func (s *Server) setupRoutes() {
 	mux.HandleFunc("/stats", healthHandler.Stats)
 
 	middlewareChain := middleware.Chain(
-		middleware.RecoveryMiddleware(s.logger),
+		middleware.RecoveryMiddleware(s.log),
 		middleware.RequestIDMiddleware(),
-		middleware.LoggingMiddleware(s.logger),
+		middleware.LoggingMiddleware(s.log),
 		middleware.CORSMiddleware(),
 		middleware.SecurityHeadersMiddleware(),
 		middleware.MaxRequestSizeMiddleware(s.config.Storage.MaxFileSize),
-		middleware.ShutdownMiddleware(s.IsShuttingDown, s.logger),
 	)
 
 	s.httpServer = &http.Server{
@@ -103,7 +103,7 @@ func (s *Server) setupRoutes() {
 	}
 }
 
-func (s *Server) routeJobRequests(jobHandler *handlers.JobHandler) http.HandlerFunc {
+func (s *Server) routeJobRequests(jobHandler *handlers.Job) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
@@ -122,7 +122,7 @@ func (s *Server) routeJobRequests(jobHandler *handlers.JobHandler) http.HandlerF
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	s.logger.InfoContext(ctx, "starting server",
+	s.log.InfoContext(ctx, "starting server",
 		"address", s.httpServer.Addr,
 		"upload_dir", s.config.Storage.UploadDir,
 		"result_dir", s.config.Storage.ResultDir,
@@ -132,7 +132,7 @@ func (s *Server) Start(ctx context.Context) error {
 	errCh := make(chan error, 1)
 
 	go func() {
-		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := s.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- fmt.Errorf("server listen failed: %w", err)
 		}
 	}()
@@ -148,10 +148,10 @@ func (s *Server) Start(ctx context.Context) error {
 	case err := <-errCh:
 		return err
 	case sig := <-sigCh:
-		s.logger.InfoContext(ctx, "received shutdown signal", "signal", sig.String())
+		s.log.InfoContext(ctx, "received shutdown signal", "signal", sig.String())
 		return s.shutdown(ctx)
 	case <-ctx.Done():
-		s.logger.InfoContext(ctx, "context cancelled, shutting down")
+		s.log.InfoContext(ctx, "context cancelled, shutting down")
 		return s.shutdown(ctx)
 	}
 }
@@ -159,53 +159,48 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) shutdown(ctx context.Context) error {
 	// Signal that we're shutting down
 	atomic.StoreInt32(&s.shuttingDown, 1)
-	
+
 	shutdownCtx, cancel := context.WithTimeout(ctx, s.config.Server.ShutdownTimeout)
 	defer cancel()
 
-	s.logger.InfoContext(shutdownCtx, "initiating graceful shutdown", 
+	s.log.InfoContext(shutdownCtx, "initiating graceful shutdown",
 		"timeout", s.config.Server.ShutdownTimeout.String())
 
 	// Step 1: Stop accepting new HTTP requests and close existing connections
-	s.logger.InfoContext(shutdownCtx, "stopping HTTP server...")
+	s.log.InfoContext(shutdownCtx, "stopping HTTP server...")
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-		s.logger.ErrorContext(shutdownCtx, "HTTP server shutdown failed", "error", err)
+		s.log.ErrorContext(shutdownCtx, "HTTP server shutdown failed", "error", err)
 		// Don't return immediately, try to cleanup other resources
 	} else {
-		s.logger.InfoContext(shutdownCtx, "HTTP server stopped successfully")
+		s.log.InfoContext(shutdownCtx, "HTTP server stopped successfully")
 	}
 
 	// Step 2: Close Redis queue connection
 	if s.queue != nil {
-		s.logger.InfoContext(shutdownCtx, "closing Redis connection...")
+		s.log.InfoContext(shutdownCtx, "closing Redis connection...")
 		if err := s.queue.Close(); err != nil {
-			s.logger.ErrorContext(shutdownCtx, "failed to close Redis connection", "error", err)
+			s.log.ErrorContext(shutdownCtx, "failed to close Redis connection", "error", err)
 		} else {
-			s.logger.InfoContext(shutdownCtx, "Redis connection closed successfully")
+			s.log.InfoContext(shutdownCtx, "Redis connection closed successfully")
 		}
 	}
 
 	// Step 3: Close database connections
-	if s.db != nil {
-		s.logger.InfoContext(shutdownCtx, "closing database connections...")
-		if err := s.db.Close(); err != nil {
-			s.logger.ErrorContext(shutdownCtx, "failed to close database connection", "error", err)
+	if s.repo != nil {
+		s.log.InfoContext(shutdownCtx, "closing database connections...")
+		if err := s.repo.Close(); err != nil {
+			s.log.ErrorContext(shutdownCtx, "failed to close database connection", "error", err)
 		} else {
-			s.logger.InfoContext(shutdownCtx, "database connections closed successfully")
+			s.log.InfoContext(shutdownCtx, "database connections closed successfully")
 		}
 	}
 
-	s.logger.InfoContext(shutdownCtx, "graceful shutdown completed")
+	s.log.InfoContext(shutdownCtx, "graceful shutdown completed")
 	return nil
 }
 
-// IsShuttingDown returns true if the server is in the process of shutting down
-func (s *Server) IsShuttingDown() bool {
-	return atomic.LoadInt32(&s.shuttingDown) == 1
-}
-
 func (s *Server) HealthCheck(ctx context.Context) error {
-	if err := s.db.HealthCheck(ctx); err != nil {
+	if err := s.repo.HealthCheck(ctx); err != nil {
 		return fmt.Errorf("database health check failed: %w", err)
 	}
 
@@ -215,4 +210,3 @@ func (s *Server) HealthCheck(ctx context.Context) error {
 
 	return nil
 }
-

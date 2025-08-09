@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -39,7 +38,7 @@ func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return hijacker.Hijack()
 }
 
-func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
+func LoggingMiddleware(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -54,7 +53,7 @@ func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			duration := time.Since(start)
 
-			logger.Info("http request",
+			log.Info("http request",
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", rw.statusCode,
@@ -99,12 +98,12 @@ func SecurityHeadersMiddleware() func(http.Handler) http.Handler {
 	}
 }
 
-func RecoveryMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
+func RecoveryMiddleware(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
-					logger.Error("panic recovered",
+					log.Error("panic recovered",
 						"error", err,
 						"method", r.Method,
 						"path", r.URL.Path,
@@ -113,26 +112,16 @@ func RecoveryMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte(`{"error": "internal server error", "status": 500}`))
-				}
-			}()
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func ContentTypeMiddleware(contentType string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPost || r.Method == http.MethodPut {
-				if ct := r.Header.Get("Content-Type"); ct != "" {
-					if !strings.HasPrefix(ct, contentType) && !strings.HasPrefix(ct, "multipart/form-data") {
-						http.Error(w, "Invalid content type", http.StatusUnsupportedMediaType)
-						return
+					if _, sErr := w.Write([]byte(`{"error": "internal server error", "status": 500}`)); sErr != nil {
+						log.Error("failed to write error response",
+							"error", sErr,
+							"method", r.Method,
+							"path", r.URL.Path,
+							"remote_addr", getClientIP(r),
+						)
 					}
 				}
-			}
+			}()
 
 			next.ServeHTTP(w, r)
 		})
@@ -199,41 +188,5 @@ func Chain(middlewares ...func(http.Handler) http.Handler) func(http.Handler) ht
 			handler = middlewares[i](handler)
 		}
 		return handler
-	}
-}
-
-// ShutdownMiddleware rejects new requests during graceful shutdown
-// This helps prevent new long-running operations from starting while shutdown is in progress
-func ShutdownMiddleware(isShuttingDown func() bool, logger *slog.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Allow health checks during shutdown for Kubernetes probes
-			if r.URL.Path == "/health" || r.URL.Path == "/ready" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Check if server is shutting down
-			if isShuttingDown != nil && isShuttingDown() {
-				logger.InfoContext(r.Context(), "rejecting request during shutdown", 
-					"method", r.Method, 
-					"path", r.URL.Path,
-					"remote_addr", r.RemoteAddr)
-				
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusServiceUnavailable)
-				
-				response := map[string]interface{}{
-					"error":     "service unavailable - server is shutting down",
-					"status":    http.StatusServiceUnavailable,
-					"timestamp": time.Now().Unix(),
-				}
-				
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
 	}
 }

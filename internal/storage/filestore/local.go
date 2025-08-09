@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rsav/k8s-learning/internal/api/handlers"
 )
 
 type FileStore struct {
@@ -29,11 +28,11 @@ type FileInfo struct {
 
 func NewFileStore(uploadDir, resultDir string, maxSize int64) (*FileStore, error) {
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create upload directory: %w", err)
+		return nil, fmt.Errorf("create upload directory: %w", err)
 	}
 
 	if err := os.MkdirAll(resultDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create result directory: %w", err)
+		return nil, fmt.Errorf("create result directory: %w", err)
 	}
 
 	return &FileStore{
@@ -43,7 +42,7 @@ func NewFileStore(uploadDir, resultDir string, maxSize int64) (*FileStore, error
 	}, nil
 }
 
-func (fs *FileStore) SaveUploadedFile(fileHeader *multipart.FileHeader) (*handlers.FileInfo, error) {
+func (fs *FileStore) SaveUploadedFile(fileHeader *multipart.FileHeader) (*FileInfo, error) {
 	if fileHeader.Size > fs.maxSize {
 		return nil, fmt.Errorf("file size %d exceeds maximum allowed size %d",
 			fileHeader.Size, fs.maxSize)
@@ -55,7 +54,7 @@ func (fs *FileStore) SaveUploadedFile(fileHeader *multipart.FileHeader) (*handle
 
 	file, err := fileHeader.Open()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open uploaded file: %w", err)
+		return nil, fmt.Errorf("open uploaded file: %w", err)
 	}
 	defer file.Close()
 
@@ -66,17 +65,17 @@ func (fs *FileStore) SaveUploadedFile(fileHeader *multipart.FileHeader) (*handle
 
 	dst, err := os.Create(storedPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create destination file: %w", err)
+		return nil, fmt.Errorf("create destination file: %w", err)
 	}
 	defer dst.Close()
 
 	size, err := io.Copy(dst, file)
 	if err != nil {
 		os.Remove(storedPath)
-		return nil, fmt.Errorf("failed to save file: %w", err)
+		return nil, fmt.Errorf("save file: %w", err)
 	}
 
-	return &handlers.FileInfo{
+	return &FileInfo{
 		ID:           fileID,
 		OriginalName: fileHeader.Filename,
 		StoredPath:   storedPath,
@@ -90,7 +89,7 @@ func (fs *FileStore) SaveResultFile(jobID uuid.UUID, filename string, content []
 	resultPath := filepath.Join(fs.resultDir, resultName)
 
 	if err := os.WriteFile(resultPath, content, 0644); err != nil {
-		return "", fmt.Errorf("failed to save result file: %w", err)
+		return "", fmt.Errorf("save result file: %w", err)
 	}
 
 	return resultPath, nil
@@ -103,7 +102,7 @@ func (fs *FileStore) ReadFile(filePath string) ([]byte, error) {
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		return nil, fmt.Errorf("read file: %w", err)
 	}
 
 	return content, nil
@@ -124,7 +123,7 @@ func (fs *FileStore) DeleteFile(filePath string) error {
 	}
 
 	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to delete file: %w", err)
+		return fmt.Errorf("delete file: %w", err)
 	}
 
 	return nil
@@ -137,7 +136,7 @@ func (fs *FileStore) GetFileSize(filePath string) (int64, error) {
 
 	info, err := os.Stat(filePath)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get file info: %w", err)
+		return 0, fmt.Errorf("get file info: %w", err)
 	}
 
 	return info.Size(), nil
@@ -150,7 +149,7 @@ func (fs *FileStore) GetFileModTime(filePath string) (time.Time, error) {
 
 	info, err := os.Stat(filePath)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to get file info: %w", err)
+		return time.Time{}, fmt.Errorf("get file info: %w", err)
 	}
 
 	return info.ModTime(), nil
@@ -166,7 +165,7 @@ func (fs *FileStore) CleanupOldFiles(maxAge time.Duration) error {
 
 		if !info.IsDir() && info.ModTime().Before(cutoff) {
 			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("failed to remove old file %s: %w", path, err)
+				return fmt.Errorf("remove old file %s: %w", path, err)
 			}
 		}
 
@@ -174,7 +173,7 @@ func (fs *FileStore) CleanupOldFiles(maxAge time.Duration) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to cleanup upload directory: %w", err)
+		return fmt.Errorf("cleanup upload directory: %w", err)
 	}
 
 	err = filepath.Walk(fs.resultDir, func(path string, info os.FileInfo, err error) error {
@@ -184,7 +183,7 @@ func (fs *FileStore) CleanupOldFiles(maxAge time.Duration) error {
 
 		if !info.IsDir() && info.ModTime().Before(cutoff) {
 			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("failed to remove old file %s: %w", path, err)
+				return fmt.Errorf("remove old file %s: %w", path, err)
 			}
 		}
 
@@ -192,7 +191,7 @@ func (fs *FileStore) CleanupOldFiles(maxAge time.Duration) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to cleanup result directory: %w", err)
+		return fmt.Errorf("cleanup result directory: %w", err)
 	}
 
 	return nil

@@ -170,8 +170,6 @@ text-processing-queue/
 │   │   ├── database/               # PostgreSQL operations
 │   │   ├── queue/                  # Redis operations
 │   │   └── filestore/              # File storage operations
-│   └── models/
-│       └── job.go                  # Data structures
 ├── deployments/
 │   ├── base/
 │   │   ├── api/                    # API Kubernetes manifests
@@ -183,13 +181,6 @@ text-processing-queue/
 │   └── overlays/
 │       ├── development/            # Dev environment configs
 │       └── production/             # Prod environment configs
-├── terraform/
-│   ├── modules/
-│   │   └── k8s-cluster/            # Cluster provisioning
-│   ├── environments/
-│   │   ├── dev/                    # Development environment
-│   │   └── prod/                   # Production environment
-│   └── main.tf                     # Root configuration
 ├── web/
 │   ├── static/                     # HTML, CSS, JS files
 │   └── nginx.conf                  # Nginx configuration

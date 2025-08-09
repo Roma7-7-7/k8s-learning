@@ -4,26 +4,25 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 )
 
-type HealthHandler struct {
-	db              DatabaseInterface
-	queue           QueueInterface
-	logger          *slog.Logger
-	isShuttingDown  func() bool
+type Health struct {
+	repo   Repository
+	queue  Queue
+	logger *slog.Logger
 }
 
-func NewHealthHandler(db DatabaseInterface, queue QueueInterface, logger *slog.Logger, isShuttingDown func() bool) *HealthHandler {
-	return &HealthHandler{
-		db:             db,
-		queue:          queue,
-		logger:         logger,
-		isShuttingDown: isShuttingDown,
+func NewHealth(repo Repository, queue Queue, log *slog.Logger) *Health {
+	return &Health{
+		repo:   repo,
+		queue:  queue,
+		logger: log,
 	}
 }
 
-func (hh *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
+func (hh *Health) Health(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		hh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -38,7 +37,7 @@ func (hh *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	hh.writeJSON(w, http.StatusOK, health)
 }
 
-func (hh *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
+func (hh *Health) Ready(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		hh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -52,32 +51,20 @@ func (hh *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
 
 	allHealthy := true
 
-	// Check if server is shutting down first
-	if hh.isShuttingDown != nil && hh.isShuttingDown() {
-		checks["shutdown"] = "shutting_down"
+	if err := hh.repo.HealthCheck(r.Context()); err != nil {
+		checks["database"] = "unhealthy"
 		allHealthy = false
-		hh.logger.InfoContext(r.Context(), "readiness check failed: server is shutting down")
+		hh.logger.ErrorContext(r.Context(), "database health check failed", "error", err)
 	} else {
-		checks["shutdown"] = "running"
+		checks["database"] = "healthy"
 	}
 
-	// Only check dependencies if not shutting down
-	if allHealthy {
-		if err := hh.db.HealthCheck(r.Context()); err != nil {
-			checks["database"] = "unhealthy"
-			allHealthy = false
-			hh.logger.ErrorContext(r.Context(), "database health check failed", "error", err)
-		} else {
-			checks["database"] = "healthy"
-		}
-
-		if err := hh.queue.HealthCheck(r.Context()); err != nil {
-			checks["redis"] = "unhealthy"
-			allHealthy = false
-			hh.logger.ErrorContext(r.Context(), "redis health check failed", "error", err)
-		} else {
-			checks["redis"] = "healthy"
-		}
+	if err := hh.queue.HealthCheck(r.Context()); err != nil {
+		checks["redis"] = "unhealthy"
+		allHealthy = false
+		hh.logger.ErrorContext(r.Context(), "redis health check failed", "error", err)
+	} else {
+		checks["redis"] = "healthy"
 	}
 
 	status := "ready"
@@ -98,7 +85,7 @@ func (hh *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
 	hh.writeJSON(w, statusCode, response)
 }
 
-func (hh *HealthHandler) Stats(w http.ResponseWriter, r *http.Request) {
+func (hh *Health) Stats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		hh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -111,35 +98,67 @@ func (hh *HealthHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	totalJobs, err := hh.db.Jobs().Count(r.Context())
-	if err != nil {
-		hh.logger.Error("failed to count total jobs", "error", err)
-		totalJobs = -1
-	}
+	wg := sync.WaitGroup{}
 
-	pendingJobs, err := hh.db.Jobs().CountByStatus(r.Context(), "pending")
-	if err != nil {
-		hh.logger.Error("failed to count pending jobs", "error", err)
-		pendingJobs = -1
-	}
+	var totalJobs int
+	wg.Add(1)
+	go func() {
+		var gErr error
+		defer wg.Done()
+		totalJobs, gErr = hh.repo.CountJobs(r.Context())
+		if gErr != nil {
+			hh.logger.Error("failed to count total jobs", "error", gErr)
+			totalJobs = -1
+		}
+	}()
 
-	runningJobs, err := hh.db.Jobs().CountByStatus(r.Context(), "running")
-	if err != nil {
-		hh.logger.Error("failed to count running jobs", "error", err)
-		runningJobs = -1
-	}
+	var pendingJobs int
+	wg.Add(1)
+	go func() {
+		var gErr error
+		defer wg.Done()
+		pendingJobs, gErr = hh.repo.CountJobsByStatus(r.Context(), "pending")
+		if gErr != nil {
+			hh.logger.Error("failed to count pending jobs", "error", gErr)
+			pendingJobs = -1
+		}
+	}()
 
-	succeededJobs, err := hh.db.Jobs().CountByStatus(r.Context(), "succeeded")
-	if err != nil {
-		hh.logger.Error("failed to count succeeded jobs", "error", err)
-		succeededJobs = -1
-	}
+	var runningJobs int
+	wg.Add(1)
+	go func() {
+		var gErr error
+		defer wg.Done()
+		runningJobs, gErr = hh.repo.CountJobsByStatus(r.Context(), "running")
+		if gErr != nil {
+			hh.logger.Error("failed to count running jobs", "error", gErr)
+			runningJobs = -1
+		}
+	}()
 
-	failedJobs, err := hh.db.Jobs().CountByStatus(r.Context(), "failed")
-	if err != nil {
-		hh.logger.Error("failed to count failed jobs", "error", err)
-		failedJobs = -1
-	}
+	var succeededJobs int
+	wg.Add(1)
+	go func() {
+		var gErr error
+		defer wg.Done()
+		succeededJobs, gErr = hh.repo.CountJobsByStatus(r.Context(), "succeeded")
+		if gErr != nil {
+			hh.logger.Error("failed to count succeeded jobs", "error", gErr)
+			succeededJobs = -1
+		}
+	}()
+
+	var failedJobs int
+	wg.Add(1)
+	go func() {
+		var gErr error
+		defer wg.Done()
+		failedJobs, gErr = hh.repo.CountJobsByStatus(r.Context(), "failed")
+		if gErr != nil {
+			hh.logger.Error("failed to count failed jobs", "error", gErr)
+			failedJobs = -1
+		}
+	}()
 
 	stats := map[string]interface{}{
 		"timestamp": time.Now().Unix(),
@@ -157,7 +176,7 @@ func (hh *HealthHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	hh.writeJSON(w, http.StatusOK, stats)
 }
 
-func (hh *HealthHandler) writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+func (hh *Health) writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
@@ -166,7 +185,7 @@ func (hh *HealthHandler) writeJSON(w http.ResponseWriter, statusCode int, data i
 	}
 }
 
-func (hh *HealthHandler) writeError(w http.ResponseWriter, statusCode int, message string) {
+func (hh *Health) writeError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 

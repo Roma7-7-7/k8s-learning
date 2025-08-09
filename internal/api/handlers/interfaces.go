@@ -5,46 +5,35 @@ import (
 	"mime/multipart"
 
 	"github.com/google/uuid"
-	"github.com/rsav/k8s-learning/internal/models"
+	"github.com/rsav/k8s-learning/internal/storage/database"
+	"github.com/rsav/k8s-learning/internal/storage/filestore"
+	"github.com/rsav/k8s-learning/internal/storage/queue"
 )
 
-// DatabaseInterface defines what the handlers need from a database
-type DatabaseInterface interface {
-	Jobs() JobRepositoryInterface
+type Repository interface {
+	JobsRepository
 	HealthCheck(ctx context.Context) error
 }
 
-// JobRepositoryInterface defines what handlers need for job operations
-type JobRepositoryInterface interface {
-	Create(ctx context.Context, job *models.Job) error
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Job, error)
-	List(ctx context.Context, req models.ListJobsRequest) ([]*models.Job, error)
-	Count(ctx context.Context) (int64, error)
-	CountByStatus(ctx context.Context, status string) (int64, error)
+type JobsRepository interface {
+	GetJobs(ctx context.Context, req database.GetJobsFilter) ([]*database.Job, error)
+	GetJobByID(ctx context.Context, id uuid.UUID) (*database.Job, error)
+	CountJobs(ctx context.Context) (int, error)
+	CountJobsByStatus(ctx context.Context, status database.JobStatus) (int, error)
+	CreateJob(ctx context.Context, job *database.Job) error
 }
 
-// QueueInterface defines what handlers need from a queue
-type QueueInterface interface {
-	PublishJob(ctx context.Context, message models.QueueMessage) error
+type Queue interface {
+	PublishJob(ctx context.Context, message queue.SubmitJobMessage) error
 	GetStats(ctx context.Context) (map[string]interface{}, error)
 	HealthCheck(ctx context.Context) error
 }
 
-// FileStorageInterface defines what handlers need from file storage
-type FileStorageInterface interface {
-	SaveUploadedFile(fileHeader *multipart.FileHeader) (*FileInfo, error)
+type FileStorage interface {
+	SaveUploadedFile(fileHeader *multipart.FileHeader) (*filestore.FileInfo, error)
 	ReadFile(filePath string) ([]byte, error)
 	FileExists(filePath string) bool
 	DeleteFile(filePath string) error
 	GetStoragePaths() (string, string)
 	GetMaxFileSize() int64
-}
-
-// FileInfo represents information about a stored file
-type FileInfo struct {
-	ID           string
-	OriginalName string
-	StoredPath   string
-	Size         int64
-	ContentType  string
 }

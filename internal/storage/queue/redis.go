@@ -7,9 +7,10 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/rsav/k8s-learning/internal/config"
-	"github.com/rsav/k8s-learning/internal/models"
+	"github.com/rsav/k8s-learning/internal/storage/database"
 )
 
 const (
@@ -19,16 +20,24 @@ const (
 	QueueHeartbeat = "workers:heartbeat"
 )
 
+type SubmitJobMessage struct {
+	JobID          uuid.UUID               `json:"job_id"`
+	FilePath       string                  `json:"file_path"`
+	ProcessingType database.ProcessingType `json:"processing_type"`
+	Parameters     map[string]any          `json:"parameters"`
+	Priority       int                     `json:"priority"`
+}
+
 type RedisQueue struct {
 	client *redis.Client
 	logger *slog.Logger
 }
 
-func NewRedisQueue(config config.RedisConfig, logger *slog.Logger) (*RedisQueue, error) {
+func NewRedisQueue(config config.Redis, logger *slog.Logger) (*RedisQueue, error) {
 	ctx := context.Background()
-	
+
 	logger.InfoContext(ctx, "connecting to Redis", "host", config.Host, "port", config.Port, "db", config.Database)
-	
+
 	client := redis.NewClient(&redis.Options{
 		Addr:     config.Address(),
 		Password: config.Password,
@@ -41,17 +50,17 @@ func NewRedisQueue(config config.RedisConfig, logger *slog.Logger) (*RedisQueue,
 	logger.DebugContext(pingCtx, "pinging Redis connection")
 	if err := client.Ping(pingCtx).Err(); err != nil {
 		client.Close()
-		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+		return nil, fmt.Errorf("connect to Redis: %w", err)
 	}
 
 	logger.InfoContext(ctx, "Redis connection established successfully")
 	return &RedisQueue{client: client, logger: logger}, nil
 }
 
-func (rq *RedisQueue) PublishJob(ctx context.Context, message models.QueueMessage) error {
+func (rq *RedisQueue) PublishJob(ctx context.Context, message SubmitJobMessage) error {
 	data, err := json.Marshal(message)
 	if err != nil {
-		return fmt.Errorf("failed to marshal queue message: %w", err)
+		return fmt.Errorf("marshal queue message: %w", err)
 	}
 
 	queueName := QueueMain
@@ -63,7 +72,7 @@ func (rq *RedisQueue) PublishJob(ctx context.Context, message models.QueueMessag
 
 	if err := rq.client.LPush(ctx, queueName, data).Err(); err != nil {
 		rq.logger.ErrorContext(ctx, "failed to publish job to queue", "job_id", message.JobID, "queue", queueName, "error", err)
-		return fmt.Errorf("failed to publish job to queue: %w", err)
+		return fmt.Errorf("publish job to queue: %w", err)
 	}
 
 	rq.logger.InfoContext(ctx, "job published successfully", "job_id", message.JobID, "queue", queueName)
@@ -73,7 +82,7 @@ func (rq *RedisQueue) PublishJob(ctx context.Context, message models.QueueMessag
 func (rq *RedisQueue) GetQueueLength(ctx context.Context, queueName string) (int64, error) {
 	length, err := rq.client.LLen(ctx, queueName).Result()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get queue length: %w", err)
+		return 0, fmt.Errorf("get queue length: %w", err)
 	}
 	return length, nil
 }
@@ -93,26 +102,26 @@ func (rq *RedisQueue) GetAllQueuesLength(ctx context.Context) (map[string]int64,
 	return lengths, nil
 }
 
-func (rq *RedisQueue) PublishToFailedQueue(ctx context.Context, message models.QueueMessage, errorMsg string) error {
+func (rq *RedisQueue) PublishToFailedQueue(ctx context.Context, message SubmitJobMessage, errorMsg string) error {
 	failedMessage := struct {
-		models.QueueMessage
+		SubmitJobMessage
 		FailedAt     time.Time `json:"failed_at"`
 		ErrorMessage string    `json:"error_message"`
 		RetryCount   int       `json:"retry_count"`
 	}{
-		QueueMessage: message,
-		FailedAt:     time.Now(),
-		ErrorMessage: errorMsg,
-		RetryCount:   1,
+		SubmitJobMessage: message,
+		FailedAt:         time.Now(),
+		ErrorMessage:     errorMsg,
+		RetryCount:       1,
 	}
 
 	data, err := json.Marshal(failedMessage)
 	if err != nil {
-		return fmt.Errorf("failed to marshal failed message: %w", err)
+		return fmt.Errorf("marshal failed message: %w", err)
 	}
 
 	if err := rq.client.LPush(ctx, QueueFailed, data).Err(); err != nil {
-		return fmt.Errorf("failed to publish to failed queue: %w", err)
+		return fmt.Errorf("publish to failed queue: %w", err)
 	}
 
 	return nil
@@ -128,11 +137,11 @@ func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string) e
 
 	data, err := json.Marshal(heartbeat)
 	if err != nil {
-		return fmt.Errorf("failed to marshal heartbeat: %w", err)
+		return fmt.Errorf("marshal heartbeat: %w", err)
 	}
 
 	if err := rq.client.Set(ctx, key, data, 5*time.Minute).Err(); err != nil {
-		return fmt.Errorf("failed to set worker heartbeat: %w", err)
+		return fmt.Errorf("set worker heartbeat: %w", err)
 	}
 
 	return nil
@@ -142,7 +151,7 @@ func (rq *RedisQueue) GetActiveWorkers(ctx context.Context) ([]string, error) {
 	pattern := fmt.Sprintf("%s:*", QueueHeartbeat)
 	keys, err := rq.client.Keys(ctx, pattern).Result()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get worker keys: %w", err)
+		return nil, fmt.Errorf("get worker keys: %w", err)
 	}
 
 	var activeWorkers []string
@@ -169,7 +178,7 @@ func (rq *RedisQueue) CleanupStaleWorkers(ctx context.Context, maxAge time.Durat
 	pattern := fmt.Sprintf("%s:*", QueueHeartbeat)
 	keys, err := rq.client.Keys(ctx, pattern).Result()
 	if err != nil {
-		return fmt.Errorf("failed to get worker keys: %w", err)
+		return fmt.Errorf("get worker keys: %w", err)
 	}
 
 	cutoff := time.Now().Add(-maxAge).Unix()
@@ -188,7 +197,7 @@ func (rq *RedisQueue) CleanupStaleWorkers(ctx context.Context, maxAge time.Durat
 		if lastSeen, ok := heartbeat["last_seen"].(float64); ok {
 			if int64(lastSeen) < cutoff {
 				if err := rq.client.Del(ctx, key).Err(); err != nil {
-					return fmt.Errorf("failed to cleanup stale worker: %w", err)
+					return fmt.Errorf("cleanup stale worker: %w", err)
 				}
 			}
 		}
