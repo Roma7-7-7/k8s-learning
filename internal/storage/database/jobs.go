@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
 )
 
@@ -82,6 +83,30 @@ func ToJobStatus(status string) (JobStatus, bool) {
 	return res, ok
 }
 
+// psql is a Squirrel query builder configured for PostgreSQL.
+//
+//nolint:gochecknoglobals // psql is a stateless query builder, safe to use as global
+var psql = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+
+// jobSelectColumns defines the standard columns returned when querying jobs.
+// Uses COALESCE to handle NULL values gracefully by converting them to empty strings.
+//
+//nolint:gochecknoglobals // jobSelectColumns is a read-only slice, safe to use as global
+var jobSelectColumns = []string{
+	"id",
+	"original_filename",
+	"file_path",
+	"processing_type",
+	"parameters",
+	"status",
+	"COALESCE(result_path, '') as result_path",
+	"COALESCE(error_message, '') as error_message",
+	"created_at",
+	"started_at",
+	"completed_at",
+	"COALESCE(worker_id, '') as worker_id",
+}
+
 type GetJobsFilter struct {
 	Status JobStatus
 	Limit  int
@@ -96,18 +121,23 @@ func (r *Repository) GetJobs(ctx context.Context, req GetJobsFilter) ([]*Job, er
 		req.Offset = 0 // Default offset
 	}
 
-	query := `
-		SELECT id, original_filename, file_path, processing_type, 
-			   parameters, status, COALESCE(result_path, '') as result_path, 
-			   COALESCE(error_message, '') as error_message, 
-			   created_at, started_at, completed_at, COALESCE(worker_id, '') as worker_id
-		FROM jobs 
-		ORDER BY created_at DESC 
-		LIMIT $1 OFFSET $2`
+	query := psql.Select(jobSelectColumns...).
+		From("jobs").
+		OrderBy("created_at DESC").
+		Limit(uint64(req.Limit)).
+		Offset(uint64(req.Offset))
 
-	args := []interface{}{req.Limit, req.Offset}
+	// Add status filter if specified
+	if req.Status != "" {
+		query = query.Where(squirrel.Eq{"status": req.Status})
+	}
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	sqlQuery, args, err := query.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build query: %w", err)
+	}
+
+	rows, err := r.db.QueryxContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list jobs: %w", err)
 	}
@@ -131,15 +161,16 @@ func (r *Repository) GetJobs(ctx context.Context, req GetJobsFilter) ([]*Job, er
 
 func (r *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*Job, error) {
 	var job Job
-	query := `
-		SELECT id, original_filename, file_path, processing_type, 
-			   parameters, status, COALESCE(result_path, '') as result_path, 
-			   COALESCE(error_message, '') as error_message, 
-			   created_at, started_at, completed_at, COALESCE(worker_id, '') as worker_id
-		FROM jobs 
-		WHERE id = $1`
 
-	err := r.db.GetContext(ctx, &job, query, id)
+	query, args, err := psql.Select(jobSelectColumns...).
+		From("jobs").
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build query: %w", err)
+	}
+
+	err = r.db.GetContext(ctx, &job, query, args...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("job not found: %s", id)
@@ -152,9 +183,13 @@ func (r *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*Job, error)
 
 func (r *Repository) CountJobs(ctx context.Context) (int, error) {
 	var count int
-	query := `SELECT COUNT(*) FROM jobs`
 
-	err := r.db.GetContext(ctx, &count, query)
+	sqlQuery, args, err := psql.Select("COUNT(*)").From("jobs").ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("build query: %w", err)
+	}
+
+	err = r.db.GetContext(ctx, &count, sqlQuery, args...)
 	if err != nil {
 		return 0, fmt.Errorf("count jobs: %w", err)
 	}
@@ -164,9 +199,16 @@ func (r *Repository) CountJobs(ctx context.Context) (int, error) {
 
 func (r *Repository) CountJobsByStatus(ctx context.Context, status JobStatus) (int, error) {
 	var count int
-	query := `SELECT COUNT(*) FROM jobs WHERE status = $1`
 
-	err := r.db.GetContext(ctx, &count, query, status)
+	sqlQuery, args, err := psql.Select("COUNT(*)").
+		From("jobs").
+		Where(squirrel.Eq{"status": status}).
+		ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("build query: %w", err)
+	}
+
+	err = r.db.GetContext(ctx, &count, sqlQuery, args...)
 	if err != nil {
 		return 0, fmt.Errorf("count jobs by status: %w", err)
 	}
@@ -175,16 +217,17 @@ func (r *Repository) CountJobsByStatus(ctx context.Context, status JobStatus) (i
 }
 
 func (r *Repository) CreateJob(ctx context.Context, job *Job) error {
-	query := `
-		INSERT INTO jobs (
-			id, original_filename, file_path, processing_type, 
-			parameters, status, created_at
-		) VALUES (
-			:id, :original_filename, :file_path, :processing_type, 
-			:parameters, :status, :created_at
-		)`
+	sqlQuery, args, err := psql.Insert("jobs").
+		Columns("id", "original_filename", "file_path", "processing_type",
+			"parameters", "status", "created_at").
+		Values(job.ID, job.OriginalFilename, job.FilePath, job.ProcessingType,
+			job.Parameters, job.Status, job.CreatedAt).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build query: %w", err)
+	}
 
-	_, err := r.db.NamedExecContext(ctx, query, job)
+	_, err = r.db.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
@@ -194,31 +237,27 @@ func (r *Repository) CreateJob(ctx context.Context, job *Job) error {
 
 func (r *Repository) UpdateStatus(ctx context.Context, id uuid.UUID, status JobStatus, workerID *string) error {
 	now := time.Now()
-	var query string
-	var args []interface{}
+
+	query := psql.Update("jobs").Where(squirrel.Eq{"id": id})
 
 	switch status {
 	case JobStatusRunning:
-		query = `
-			UPDATE jobs 
-			SET status = $1, started_at = $2, worker_id = $3
-			WHERE id = $4`
-		args = []interface{}{status, now, workerID, id}
+		query = query.Set("status", status).
+			Set("started_at", now).
+			Set("worker_id", workerID)
 	case JobStatusSucceeded, JobStatusFailed:
-		query = `
-			UPDATE jobs 
-			SET status = $1, completed_at = $2
-			WHERE id = $3`
-		args = []interface{}{status, now, id}
+		query = query.Set("status", status).
+			Set("completed_at", now)
 	case JobStatusPending:
-		query = `
-			UPDATE jobs 
-			SET status = $1
-			WHERE id = $2`
-		args = []interface{}{status, id}
+		query = query.Set("status", status)
 	}
 
-	result, err := r.db.ExecContext(ctx, query, args...)
+	sqlQuery, args, err := query.ToSql()
+	if err != nil {
+		return fmt.Errorf("build query: %w", err)
+	}
+
+	result, err := r.db.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("update job status: %w", err)
 	}
@@ -236,12 +275,17 @@ func (r *Repository) UpdateStatus(ctx context.Context, id uuid.UUID, status JobS
 }
 
 func (r *Repository) UpdateResult(ctx context.Context, id uuid.UUID, resultPath string) error {
-	query := `
-		UPDATE jobs 
-		SET result_path = $1, status = $2, completed_at = $3
-		WHERE id = $4`
+	sqlQuery, args, err := psql.Update("jobs").
+		Set("result_path", resultPath).
+		Set("status", JobStatusSucceeded).
+		Set("completed_at", time.Now()).
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build query: %w", err)
+	}
 
-	result, err := r.db.ExecContext(ctx, query, resultPath, JobStatusSucceeded, time.Now(), id)
+	result, err := r.db.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("update job result: %w", err)
 	}
@@ -259,12 +303,17 @@ func (r *Repository) UpdateResult(ctx context.Context, id uuid.UUID, resultPath 
 }
 
 func (r *Repository) UpdateError(ctx context.Context, id uuid.UUID, errorMessage string) error {
-	query := `
-		UPDATE jobs 
-		SET error_message = $1, status = $2, completed_at = $3
-		WHERE id = $4`
+	sqlQuery, args, err := psql.Update("jobs").
+		Set("error_message", errorMessage).
+		Set("status", JobStatusFailed).
+		Set("completed_at", time.Now()).
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build query: %w", err)
+	}
 
-	result, err := r.db.ExecContext(ctx, query, errorMessage, JobStatusFailed, time.Now(), id)
+	result, err := r.db.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return fmt.Errorf("update job error: %w", err)
 	}
