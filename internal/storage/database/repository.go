@@ -31,7 +31,7 @@ func NewRepository(conf config.Database, logger *slog.Logger) (*Repository, erro
 	logger.DebugContext(ctx, "connection pool configured", "max_conns", conf.MaxConns, "max_idle", conf.MaxIdle)
 
 	logger.InfoContext(ctx, "running database migrations")
-	if err := RunMigrations(db, logger); err != nil {
+	if err := RunMigrations(conf.ConnectionString(), logger); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}

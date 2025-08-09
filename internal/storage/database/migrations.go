@@ -12,11 +12,18 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func RunMigrations(db *sqlx.DB, logger *slog.Logger) error {
+func RunMigrations(connStr string, logger *slog.Logger) error {
 	ctx := context.Background()
 
+	logger.DebugContext(ctx, "creating separate database connection for migrations")
+	migrationDB, err := sqlx.Open("pgx", connStr)
+	if err != nil {
+		return fmt.Errorf("open migration database connection: %w", err)
+	}
+	defer migrationDB.Close()
+
 	logger.DebugContext(ctx, "creating migration driver instance")
-	driver, err := pgxv5.WithInstance(db.DB, &pgxv5.Config{})
+	driver, err := pgxv5.WithInstance(migrationDB.DB, &pgxv5.Config{})
 	if err != nil {
 		return fmt.Errorf("create pgx driver: %w", err)
 	}

@@ -79,13 +79,14 @@ func (s *Server) setupRoutes() {
 	jobHandler := handlers.NewJob(s.repo, s.queue, s.fileStore, s.log)
 	healthHandler := handlers.NewHealth(s.repo, s.queue, s.log)
 
+	mux.HandleFunc("GET /health", healthHandler.Health)
+	mux.HandleFunc("GET /ready", healthHandler.Ready)
+	mux.HandleFunc("GET /stats", healthHandler.Stats)
+
 	mux.HandleFunc("POST /api/v1/jobs", jobHandler.CreateJob)
 	mux.HandleFunc("GET /api/v1/jobs", jobHandler.ListJobs)
 	mux.HandleFunc("GET /api/v1/jobs/{id}", jobHandler.GetJob)
 	mux.HandleFunc("GET /api/v1/jobs/{id}/result", jobHandler.GetJobResult)
-	mux.HandleFunc("GET /health", healthHandler.Health)
-	mux.HandleFunc("GET /ready", healthHandler.Ready)
-	mux.HandleFunc("GET /stats", healthHandler.Stats)
 
 	middlewareChain := middleware.Chain(
 		middleware.RecoveryMiddleware(s.log),

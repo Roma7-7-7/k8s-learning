@@ -36,7 +36,6 @@ func (hh *Health) Ready(w http.ResponseWriter, r *http.Request) {
 	checks := map[string]interface{}{
 		"database": "unknown",
 		"redis":    "unknown",
-		"shutdown": "unknown",
 	}
 
 	allHealthy := true
