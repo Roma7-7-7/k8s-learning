@@ -22,12 +22,7 @@ func NewHealth(repo Repository, queue Queue, log *slog.Logger) *Health {
 	}
 }
 
-func (hh *Health) Health(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		hh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
+func (hh *Health) Health(w http.ResponseWriter, _ *http.Request) {
 	health := map[string]interface{}{
 		"status":    "ok",
 		"timestamp": time.Now().Unix(),
@@ -38,11 +33,6 @@ func (hh *Health) Health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (hh *Health) Ready(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		hh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
 	checks := map[string]interface{}{
 		"database": "unknown",
 		"redis":    "unknown",
@@ -86,11 +76,6 @@ func (hh *Health) Ready(w http.ResponseWriter, r *http.Request) {
 }
 
 func (hh *Health) Stats(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		hh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
 	queueStats, err := hh.queue.GetStats(r.Context())
 	if err != nil {
 		hh.log.Error("failed to get queue stats", "error", err)

@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"sync/atomic"
 	"syscall"
 
@@ -80,11 +79,13 @@ func (s *Server) setupRoutes() {
 	jobHandler := handlers.NewJob(s.repo, s.queue, s.fileStore, s.log)
 	healthHandler := handlers.NewHealth(s.repo, s.queue, s.log)
 
-	mux.HandleFunc("/api/v1/jobs", jobHandler.CreateJob)
-	mux.HandleFunc("/api/v1/jobs/", s.routeJobRequests(jobHandler))
-	mux.HandleFunc("/health", healthHandler.Health)
-	mux.HandleFunc("/ready", healthHandler.Ready)
-	mux.HandleFunc("/stats", healthHandler.Stats)
+	mux.HandleFunc("POST /api/v1/jobs", jobHandler.CreateJob)
+	mux.HandleFunc("GET /api/v1/jobs", jobHandler.ListJobs)
+	mux.HandleFunc("GET /api/v1/jobs/{id}", jobHandler.GetJob)
+	mux.HandleFunc("GET /api/v1/jobs/{id}/result", jobHandler.GetJobResult)
+	mux.HandleFunc("GET /health", healthHandler.Health)
+	mux.HandleFunc("GET /ready", healthHandler.Ready)
+	mux.HandleFunc("GET /stats", healthHandler.Stats)
 
 	middlewareChain := middleware.Chain(
 		middleware.RecoveryMiddleware(s.log),
@@ -101,24 +102,6 @@ func (s *Server) setupRoutes() {
 		ReadTimeout:  s.config.Server.ReadTimeout,
 		WriteTimeout: s.config.Server.WriteTimeout,
 		IdleTimeout:  s.config.Server.IdleTimeout,
-	}
-}
-
-func (s *Server) routeJobRequests(jobHandler *handlers.Job) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-
-		if path == "/api/v1/jobs/" {
-			jobHandler.ListJobs(w, r)
-			return
-		}
-
-		if strings.HasSuffix(path, "/result") {
-			jobHandler.GetJobResult(w, r)
-			return
-		}
-
-		jobHandler.GetJob(w, r)
 	}
 }
 

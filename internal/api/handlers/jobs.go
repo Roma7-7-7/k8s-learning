@@ -47,11 +47,6 @@ func NewJob(repo Repository, queue Queue, fileStore FileStorage, logger *slog.Lo
 }
 
 func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
 	if err := r.ParseMultipartForm(memoryLimit); err != nil {
 		jh.log.Error("failed to parse multipart form", "error", err)
 		jh.writeError(w, http.StatusBadRequest, "failed to parse form")
@@ -137,12 +132,7 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (jh *Job) GetJob(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		jh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	jobIDStr := getPathParam(r.URL.Path, "/api/v1/jobs/")
+	jobIDStr := r.PathValue("id")
 	if jobIDStr == "" {
 		jh.writeError(w, http.StatusBadRequest, "job ID is required")
 		return
@@ -165,11 +155,6 @@ func (jh *Job) GetJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (jh *Job) ListJobs(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		jh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
 	var err error
 	//nolint:mnd // we need to initialize the filter with default values
 	filter := database.GetJobsFilter{
@@ -229,12 +214,7 @@ func (jh *Job) ListJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (jh *Job) GetJobResult(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		jh.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	jobIDStr := getPathParam(r.URL.Path, "/api/v1/jobs/")
+	jobIDStr := r.PathValue("id")
 	if jobIDStr == "" {
 		jh.writeError(w, http.StatusBadRequest, "job ID is required")
 		return
@@ -350,27 +330,4 @@ func jobToResponse(j *database.Job) jobResponse {
 		CompletedAt:      j.CompletedAt,
 		WorkerID:         j.WorkerID,
 	}
-}
-
-func getPathParam(path, prefix string) string {
-	if len(path) <= len(prefix) {
-		return ""
-	}
-
-	param := path[len(prefix):]
-
-	if slashIndex := findChar(param, '/'); slashIndex != -1 {
-		param = param[:slashIndex]
-	}
-
-	return param
-}
-
-func findChar(s string, c rune) int {
-	for i, r := range s {
-		if r == c {
-			return i
-		}
-	}
-	return -1
 }
