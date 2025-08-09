@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Processing Service</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <h1>File Processing Service</h1>
+        <div class="status-indicator" id="health-status">
+            <span class="indicator" id="health-indicator"></span>
+            <span id="health-text">Checking...</span>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="upload-section">
+            <h2>Submit New Job</h2>
+            <form id="upload-form" class="upload-form">
+                <div class="form-group">
+                    <label for="file-input">Select File:</label>
+                    <input type="file" id="file-input" name="file" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="processing-type">Processing Type:</label>
+                    <select id="processing-type" name="processing_type" required>
+                        <option value="">Choose processing type</option>
+                        <option value="wordcount">Word Count</option>
+                        <option value="linecount">Line Count</option>
+                        <option value="uppercase">Convert to Uppercase</option>
+                        <option value="lowercase">Convert to Lowercase</option>
+                        <option value="replace">Find & Replace</option>
+                        <option value="extract">Extract Pattern</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="replace-params" style="display: none;">
+                    <label for="find-text">Find:</label>
+                    <input type="text" id="find-text" name="find" placeholder="Text to find">
+                    <label for="replace-text">Replace with:</label>
+                    <input type="text" id="replace-text" name="replace_with" placeholder="Replacement text">
+                </div>
+
+                <div class="form-group" id="extract-params" style="display: none;">
+                    <label for="pattern-text">Pattern:</label>
+                    <input type="text" id="pattern-text" name="pattern" placeholder="Regex pattern to extract">
+                </div>
+
+                <button type="submit" id="submit-btn" class="submit-btn">Submit Job</button>
+            </form>
+        </section>
+
+        <section class="jobs-section">
+            <div class="section-header">
+                <h2>Jobs</h2>
+                <div class="filters">
+                    <select id="status-filter">
+                        <option value="">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="running">In Progress</option>
+                        <option value="succeeded">Succeeded</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                    <button id="refresh-btn" class="refresh-btn">Refresh</button>
+                </div>
+            </div>
+            
+            <div class="jobs-grid" id="jobs-grid">
+                <div class="loading">Loading jobs...</div>
+            </div>
+        </section>
+    </main>
+
+    <div id="job-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Job Details</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+            </div>
+            <div class="modal-footer">
+                <button id="download-result" class="download-btn" style="display: none;">Download Result</button>
+                <button class="modal-close">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

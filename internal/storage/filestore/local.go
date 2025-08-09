@@ -49,10 +49,6 @@ func (fs *FileStore) SaveUploadedFile(fileHeader *multipart.FileHeader) (*FileIn
 			fileHeader.Size, fs.maxSize)
 	}
 
-	if !fs.isValidTextFile(fileHeader.Filename) {
-		return nil, errors.New("invalid file type: only text files are allowed")
-	}
-
 	file, err := fileHeader.Open()
 	if err != nil {
 		return nil, fmt.Errorf("open uploaded file: %w", err)
@@ -199,19 +195,6 @@ func (fs *FileStore) CleanupOldFiles(maxAge time.Duration) error {
 	}
 
 	return nil
-}
-
-func (fs *FileStore) isValidTextFile(filename string) bool {
-	ext := strings.ToLower(filepath.Ext(filename))
-	validExtensions := []string{".txt", ".md", ".csv", ".json", ".xml", ".log"}
-
-	for _, validExt := range validExtensions {
-		if ext == validExt {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (fs *FileStore) isValidPath(filePath string) bool {
