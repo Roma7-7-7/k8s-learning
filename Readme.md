@@ -386,6 +386,62 @@ The API service implements comprehensive graceful shutdown to handle Kubernetes 
 - Health checks (`/health`, `/ready`) remain available during shutdown
 - Kubernetes should configure `terminationGracePeriodSeconds` >= `SHUTDOWN_TIMEOUT`
 
+## API Testing with JetBrains IDEs
+
+The project includes a comprehensive HTTP client file for testing all API endpoints directly from JetBrains IDEs (IntelliJ IDEA, GoLand, WebStorm, etc.).
+
+### HTTP Client File: `api-tests.http`
+
+This file contains pre-configured requests for all API endpoints with:
+- **Health checks**: `/health`, `/ready`, `/stats`
+- **Job management**: Create, list, get details, download results
+- **All processing types**: wordcount, linecount, uppercase, lowercase, replace, extract
+- **Error scenarios**: Invalid parameters, missing files, etc.
+- **Complete workflows**: End-to-end testing scenarios
+
+### Usage in JetBrains IDEs
+
+1. **Open the file**: Navigate to `api-tests.http` in your IDE
+2. **Start the API server**: Ensure your API is running on `localhost:8080`
+3. **Run requests**: Click the ▶️ button next to any request to execute it
+4. **File uploads**: The requests include embedded test content for file uploads
+5. **Variables**: Update `@baseUrl` and `@sampleJobId` as needed
+
+### Key Features
+
+- **Multipart file uploads**: Properly formatted requests with embedded test files
+- **All processing types**: Examples for each text processing operation
+- **Parameter examples**: Correct JSON formatting for complex operations
+- **Testing scenarios**: Comprehensive error cases and workflows
+- **Sample data**: Pre-defined test content for each processing type
+
+### Test Files
+
+- `sample-files/test-file.txt`: Sample text file for manual testing
+- Embedded content in HTTP requests for automated testing
+
+### Example Usage
+
+```http
+### Create a word count job
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: text/plain
+
+Your test content here
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+wordcount
+--WebAppBoundary--
+```
+
+The HTTP client provides a complete testing environment without requiring external tools like Postman or curl.
+
 ## Build Commands
 
 ### Development

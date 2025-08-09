@@ -1,0 +1,228 @@
+### JetBrains HTTP Client for Text Processing API
+### This file contains all API endpoints for testing in JetBrains IDEs
+### Make sure the API server is running on localhost:8080
+
+### Variables
+@baseUrl = http://localhost:8080
+@sampleJobId = replace-with-actual-job-id
+
+### Health Check - Basic health status
+GET {{baseUrl}}/health
+
+### Ready Check - Database and dependencies health
+GET {{baseUrl}}/ready
+
+### Stats - Application statistics
+GET {{baseUrl}}/stats
+
+### Create Job - Word Count (no parameters needed)
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: text/plain
+
+This is a sample text file for testing word count.
+It has multiple lines and various words to count.
+Let's see how the word count processing works!
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+wordcount
+--WebAppBoundary--
+
+### Create Job - Line Count (no parameters needed)
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: text/plain
+
+Line one
+Line two
+Line three
+Line four
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+linecount
+--WebAppBoundary--
+
+### Create Job - Uppercase (no parameters needed)
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: text/plain
+
+this text should be converted to uppercase
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+uppercase
+--WebAppBoundary--
+
+### Create Job - Lowercase (no parameters needed)
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: text/plain
+
+THIS TEXT SHOULD BE CONVERTED TO LOWERCASE
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+lowercase
+--WebAppBoundary--
+
+### Create Job - Replace Text (requires find and replace_with parameters)
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: text/plain
+
+Hello world! This is a sample text.
+Hello again! Another hello for testing.
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+replace
+--WebAppBoundary
+Content-Disposition: form-data; name="parameters"
+
+{"find": "Hello", "replace_with": "Hi"}
+--WebAppBoundary--
+
+### Create Job - Extract Pattern (requires pattern parameter)
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: text/plain
+
+Contact us at info@example.com or support@test.com
+You can also reach admin@company.org for help.
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+extract
+--WebAppBoundary
+Content-Disposition: form-data; name="parameters"
+
+{"pattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"}
+--WebAppBoundary--
+
+### List All Jobs (with default pagination)
+GET {{baseUrl}}/api/v1/jobs
+
+### List Jobs with Filters and Pagination
+GET {{baseUrl}}/api/v1/jobs?status=pending&limit=10&offset=0
+
+### List Jobs by Status - Pending
+GET {{baseUrl}}/api/v1/jobs?status=pending
+
+### List Jobs by Status - Processing
+GET {{baseUrl}}/api/v1/jobs?status=processing
+
+### List Jobs by Status - Succeeded
+GET {{baseUrl}}/api/v1/jobs?status=succeeded
+
+### List Jobs by Status - Failed
+GET {{baseUrl}}/api/v1/jobs?status=failed
+
+### Get Specific Job Details
+### Replace {{sampleJobId}} with actual job ID from job creation response
+GET {{baseUrl}}/api/v1/jobs/{{sampleJobId}}
+
+### Get Job Result (only works for successfully completed jobs)
+### Replace {{sampleJobId}} with actual job ID from job creation response
+GET {{baseUrl}}/api/v1/jobs/{{sampleJobId}}/result
+
+### Example with real UUIDs (replace these with actual job IDs from your responses)
+# GET {{baseUrl}}/api/v1/jobs/123e4567-e89b-12d3-a456-426614174000
+# GET {{baseUrl}}/api/v1/jobs/123e4567-e89b-12d3-a456-426614174000/result
+
+###############################################################################
+### Testing Scenarios
+###############################################################################
+
+### Scenario 1: Complete workflow test
+### 1. First create a job
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="workflow-test.txt"
+Content-Type: text/plain
+
+This is a workflow test file.
+It contains multiple words and lines.
+We'll process this file and check the result.
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+wordcount
+--WebAppBoundary--
+
+### 2. Then check job status (use job ID from above response)
+# GET {{baseUrl}}/api/v1/jobs/YOUR_JOB_ID_HERE
+
+### 3. Finally get the result (when job is completed)
+# GET {{baseUrl}}/api/v1/jobs/YOUR_JOB_ID_HERE/result
+
+### Error Testing - Invalid processing type
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="error-test.txt"
+Content-Type: text/plain
+
+This should cause an error due to invalid processing type
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+invalid_type
+--WebAppBoundary--
+
+### Error Testing - Missing required parameter for replace
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="error-test.txt"
+Content-Type: text/plain
+
+This should cause an error due to missing find parameter
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+replace
+--WebAppBoundary--
+
+### Error Testing - Missing file
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+wordcount
+--WebAppBoundary--

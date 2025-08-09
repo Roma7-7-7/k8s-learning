@@ -1,0 +1,10 @@
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+Ut enim ad minim veniam, quis nostrud exercitation ullamco.
+
+This file contains exactly four lines of text.
+It has various words that can be counted, replaced, or extracted.
+Email examples: user@example.com, admin@test.org, support@company.net
+
+The quick brown fox jumps over the lazy dog.
+THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG.
