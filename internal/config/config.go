@@ -20,6 +20,17 @@ type API struct {
 	Logging  Logging
 }
 
+type Worker struct {
+	Database          Database
+	Redis             Redis
+	Storage           Storage
+	Logging           Logging
+	WorkerID          string        `envconfig:"WORKER_ID"`
+	ConcurrentJobs    int           `envconfig:"CONCURRENT_JOBS" default:"5"`
+	HeartbeatInterval time.Duration `envconfig:"HEARTBEAT_INTERVAL" default:"30s"`
+	PollInterval      time.Duration `envconfig:"POLL_INTERVAL" default:"5s"`
+}
+
 type Server struct {
 	Port            int           `envconfig:"PORT" default:"8080"`
 	Host            string        `envconfig:"HOST" default:"0.0.0.0"`
@@ -89,6 +100,27 @@ func Load() (*API, error) {
 	return &config, nil
 }
 
+func LoadWorker() (*Worker, error) {
+	// Try to load .env file for local development (ignore if not found)
+	if _, err := os.Stat(".env"); err == nil {
+		if err := godotenv.Load(".env"); err != nil {
+			return nil, fmt.Errorf("load .env file: %w", err)
+		}
+	}
+
+	var config Worker
+
+	if err := envconfig.Process("", &config); err != nil {
+		return nil, fmt.Errorf("process environment variables: %w", err)
+	}
+
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
+
+	return &config, nil
+}
+
 func (c *API) Validate() error {
 	// Port validation
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
@@ -125,6 +157,55 @@ func (c *API) Validate() error {
 	validLogFormats := []string{"json", "text"}
 	if !contains(validLogFormats, c.Logging.Format) {
 		return fmt.Errorf("invalid log format: %s", c.Logging.Format)
+	}
+
+	return nil
+}
+
+func (w *Worker) Validate() error {
+	// Database port validation
+	if w.Database.Port <= 0 || w.Database.Port > 65535 {
+		return fmt.Errorf("invalid database port: %d", w.Database.Port)
+	}
+
+	// Redis port validation
+	if w.Redis.Port <= 0 || w.Redis.Port > 65535 {
+		return fmt.Errorf("invalid redis port: %d", w.Redis.Port)
+	}
+
+	// Storage validation
+	if w.Storage.MaxFileSize <= 0 {
+		return errors.New("max file size must be positive")
+	}
+
+	// Worker validation
+	if w.ConcurrentJobs <= 0 {
+		return errors.New("concurrent jobs must be positive")
+	}
+
+	if w.HeartbeatInterval <= 0 {
+		return errors.New("heartbeat interval must be positive")
+	}
+
+	if w.PollInterval <= 0 {
+		return errors.New("poll interval must be positive")
+	}
+
+	// SSL mode validation
+	validSSLModes := []string{"disable", "require", "verify-ca", "verify-full"}
+	if !contains(validSSLModes, w.Database.SSLMode) {
+		return fmt.Errorf("invalid SSL mode: %s", w.Database.SSLMode)
+	}
+
+	// Logging validation
+	validLogLevels := []string{"debug", "info", "warn", "error"}
+	if !contains(validLogLevels, w.Logging.Level) {
+		return fmt.Errorf("invalid log level: %s", w.Logging.Level)
+	}
+
+	validLogFormats := []string{"json", "text"}
+	if !contains(validLogFormats, w.Logging.Format) {
+		return fmt.Errorf("invalid log format: %s", w.Logging.Format)
 	}
 
 	return nil

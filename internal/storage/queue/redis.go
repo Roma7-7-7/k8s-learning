@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -21,6 +22,8 @@ const (
 )
 
 const highPriorityThreshold = 5
+
+var ErrNoJobsAvailable = errors.New("no jobs available in the queue")
 
 type SubmitJobMessage struct {
 	JobID          uuid.UUID               `json:"job_id"`
@@ -104,6 +107,36 @@ func (rq *RedisQueue) GetAllQueuesLength(ctx context.Context) (map[string]int64,
 	}
 
 	return lengths, nil
+}
+
+func (rq *RedisQueue) ConsumeJob(ctx context.Context, timeout time.Duration) (*SubmitJobMessage, error) {
+	queues := []string{QueuePriority, QueueMain}
+
+	result, err := rq.client.BRPop(ctx, timeout, queues...).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, ErrNoJobsAvailable
+		}
+		return nil, fmt.Errorf("consume job from queue: %w", err)
+	}
+
+	const expectedBRPopResultLength = 2
+	if len(result) != expectedBRPopResultLength {
+		return nil, fmt.Errorf("unexpected BRPOP result length: %d", len(result))
+	}
+
+	queueName := result[0]
+	jobData := result[1]
+
+	rq.logger.DebugContext(ctx, "consumed job from queue", "queue", queueName, "data_length", len(jobData))
+
+	var message SubmitJobMessage
+	if err := json.Unmarshal([]byte(jobData), &message); err != nil {
+		return nil, fmt.Errorf("unmarshal job message: %w", err)
+	}
+
+	rq.logger.InfoContext(ctx, "job consumed successfully", "job_id", message.JobID, "queue", queueName)
+	return &message, nil
 }
 
 func (rq *RedisQueue) PublishToFailedQueue(ctx context.Context, message SubmitJobMessage, errorMsg string) error {
