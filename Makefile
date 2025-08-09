@@ -21,7 +21,7 @@ BUILD_DIR=build
 DOCKER_REGISTRY=localhost:5000
 IMAGE_TAG=latest
 
-.PHONY: all build clean test deps fmt lint help
+.PHONY: all build clean test deps fmt lint help web
 
 # Default target
 all: fmt test build
@@ -142,6 +142,14 @@ setup-dev:
 	@echo "2. Start PostgreSQL and Redis services"
 	@echo "3. Run: make run-api"
 
+# Run web UI development server
+web:
+	@echo "Starting web UI development server..."
+	@echo "Access the web UI at: http://localhost:3000"
+	@echo "Make sure your API server is running on http://localhost:8080"
+	@echo "Press Ctrl+C to stop the server"
+	@cd web && python3 -m http.server 3000
+
 # Help
 help:
 	@echo "Available targets:"
@@ -164,5 +172,6 @@ help:
 	@echo "  run-worker       - Build and run worker service"
 	@echo "  run-controller   - Build and run controller service"
 	@echo "  setup-dev        - Setup local development environment (.env file and directories)"
+	@echo "  web              - Start web UI development server on http://localhost:3000"
 	@echo "  generate-crds    - Generate CRD manifests"
 	@echo "  help             - Show this help message"

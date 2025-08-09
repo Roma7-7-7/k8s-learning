@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,6 +29,14 @@ type (
 		CompletedAt      *time.Time     `json:"completed_at,omitempty"`
 		WorkerID         string         `json:"worker_id,omitempty"`
 	}
+
+	errorResponse struct {
+		Error     string `json:"error"`
+		ErrorCode string `json:"error_code"`
+		Status    int    `json:"status"`
+		Timestamp int64  `json:"timestamp"`
+	}
+
 	Job struct {
 		repo      Repository
 		queue     Queue
@@ -49,21 +59,38 @@ func NewJob(repo Repository, queue Queue, fileStore FileStorage, logger *slog.Lo
 func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(memoryLimit); err != nil {
 		jh.log.Error("failed to parse multipart form", "error", err)
-		jh.writeError(w, http.StatusBadRequest, "failed to parse form")
+		jh.writeErrorWithCode(w, http.StatusBadRequest, "failed to parse form", "FORM_PARSE_ERROR")
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		jh.log.Error("failed to get file from form", "error", err)
-		jh.writeError(w, http.StatusBadRequest, "file is required")
+		jh.writeErrorWithCode(w, http.StatusBadRequest, "file is required", "FILE_MISSING")
 		return
 	}
 	_ = file.Close()
 
+	// Validate file type at handler level
+	if !jh.isValidTextFile(header.Filename) {
+		jh.writeErrorWithCode(w, http.StatusBadRequest,
+			"invalid file type: only text files (.txt, .md, .csv, .json, .xml, .log) are allowed",
+			"INVALID_FILE_TYPE")
+		return
+	}
+
+	// Check file size
+	if header.Size > jh.fileStore.GetMaxFileSize() {
+		jh.writeErrorWithCode(w, http.StatusBadRequest,
+			fmt.Sprintf("file size %d exceeds maximum allowed size %d",
+				header.Size, jh.fileStore.GetMaxFileSize()),
+			"FILE_TOO_LARGE")
+		return
+	}
+
 	processingType, ok := database.ToProcessingType(r.FormValue("processing_type"))
 	if !ok {
-		jh.writeError(w, http.StatusBadRequest, "invalid processing_type")
+		jh.writeErrorWithCode(w, http.StatusBadRequest, "invalid processing_type", "INVALID_PROCESSING_TYPE")
 		return
 	}
 
@@ -71,7 +98,7 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 	if parametersStr := r.FormValue("parameters"); parametersStr != "" {
 		if err := json.Unmarshal([]byte(parametersStr), &parameters); err != nil {
 			jh.log.Error("failed to parse parameters", "error", err)
-			jh.writeError(w, http.StatusBadRequest, "invalid parameters JSON")
+			jh.writeErrorWithCode(w, http.StatusBadRequest, "invalid parameters JSON", "INVALID_PARAMETERS_JSON")
 			return
 		}
 	} else {
@@ -79,14 +106,14 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validateProcessingTypeAndParams(processingType, parameters); err != nil {
-		jh.writeError(w, http.StatusBadRequest, err.Error())
+		jh.writeErrorWithCode(w, http.StatusBadRequest, err.Error(), "INVALID_PARAMETERS")
 		return
 	}
 
 	fileInfo, err := jh.fileStore.SaveUploadedFile(header)
 	if err != nil {
 		jh.log.Error("failed to save uploaded file", "error", err)
-		jh.writeError(w, http.StatusInternalServerError, "failed to save file")
+		jh.writeErrorWithCode(w, http.StatusInternalServerError, "failed to save file", "FILE_SAVE_ERROR")
 		return
 	}
 
@@ -105,7 +132,7 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 		if err := jh.fileStore.DeleteFile(fileInfo.StoredPath); err != nil {
 			jh.log.Error("failed to delete uploaded file after job creation failure", "error", err, "file_path", fileInfo.StoredPath)
 		}
-		jh.writeError(w, http.StatusInternalServerError, "failed to create job")
+		jh.writeErrorWithCode(w, http.StatusInternalServerError, "failed to create job", "JOB_CREATE_ERROR")
 		return
 	}
 
@@ -119,7 +146,7 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 
 	if err := jh.queue.PublishJob(r.Context(), queueMessage); err != nil {
 		jh.log.Error("failed to publish job to queue", "error", err, "job_id", job.ID)
-		jh.writeError(w, http.StatusInternalServerError, "failed to queue job")
+		jh.writeErrorWithCode(w, http.StatusInternalServerError, "failed to queue job", "QUEUE_ERROR")
 		return
 	}
 
@@ -134,20 +161,20 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 func (jh *Job) GetJob(w http.ResponseWriter, r *http.Request) {
 	jobIDStr := r.PathValue("id")
 	if jobIDStr == "" {
-		jh.writeError(w, http.StatusBadRequest, "job ID is required")
+		jh.writeErrorWithCode(w, http.StatusBadRequest, "job ID is required", "JOB_ID_MISSING")
 		return
 	}
 
 	jobID, err := uuid.Parse(jobIDStr)
 	if err != nil {
-		jh.writeError(w, http.StatusBadRequest, "invalid job ID format")
+		jh.writeErrorWithCode(w, http.StatusBadRequest, "invalid job ID format", "INVALID_JOB_ID")
 		return
 	}
 
 	job, err := jh.repo.GetJobByID(r.Context(), jobID)
 	if err != nil {
 		jh.log.Error("failed to get job", "error", err, "job_id", jobID)
-		jh.writeError(w, http.StatusNotFound, "job not found")
+		jh.writeErrorWithCode(w, http.StatusNotFound, "job not found", "JOB_NOT_FOUND")
 		return
 	}
 
@@ -166,29 +193,29 @@ func (jh *Job) ListJobs(w http.ResponseWriter, r *http.Request) {
 		var ok bool
 		filter.Status, ok = database.ToJobStatus(statusStr)
 		if !ok {
-			jh.writeError(w, http.StatusBadRequest, "invalid job status")
+			jh.writeErrorWithCode(w, http.StatusBadRequest, "invalid job status", "INVALID_STATUS_FILTER")
 			return
 		}
 	}
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if filter.Limit, err = strconv.Atoi(limitStr); err != nil {
-			jh.writeError(w, http.StatusBadRequest, "invalid limit parameter")
+			jh.writeErrorWithCode(w, http.StatusBadRequest, "invalid limit parameter", "INVALID_LIMIT")
 			return
 		}
 		if filter.Limit < 0 {
-			jh.writeError(w, http.StatusBadRequest, "limit cannot be negative")
+			jh.writeErrorWithCode(w, http.StatusBadRequest, "limit cannot be negative", "INVALID_LIMIT")
 			return
 		}
 	}
 
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
 		if filter.Offset, err = strconv.Atoi(offsetStr); err != nil {
-			jh.writeError(w, http.StatusBadRequest, "invalid offset parameter")
+			jh.writeErrorWithCode(w, http.StatusBadRequest, "invalid offset parameter", "INVALID_OFFSET")
 			return
 		}
 		if filter.Offset < 0 {
-			jh.writeError(w, http.StatusBadRequest, "offset cannot be negative")
+			jh.writeErrorWithCode(w, http.StatusBadRequest, "offset cannot be negative", "INVALID_OFFSET")
 			return
 		}
 	}
@@ -196,7 +223,7 @@ func (jh *Job) ListJobs(w http.ResponseWriter, r *http.Request) {
 	jobs, err := jh.repo.GetJobs(r.Context(), filter)
 	if err != nil {
 		jh.log.Error("failed to list jobs", "error", err)
-		jh.writeError(w, http.StatusInternalServerError, "failed to list jobs")
+		jh.writeErrorWithCode(w, http.StatusInternalServerError, "failed to list jobs", "JOB_LIST_ERROR")
 		return
 	}
 
@@ -216,43 +243,43 @@ func (jh *Job) ListJobs(w http.ResponseWriter, r *http.Request) {
 func (jh *Job) GetJobResult(w http.ResponseWriter, r *http.Request) {
 	jobIDStr := r.PathValue("id")
 	if jobIDStr == "" {
-		jh.writeError(w, http.StatusBadRequest, "job ID is required")
+		jh.writeErrorWithCode(w, http.StatusBadRequest, "job ID is required", "JOB_ID_MISSING")
 		return
 	}
 
 	jobID, err := uuid.Parse(jobIDStr)
 	if err != nil {
-		jh.writeError(w, http.StatusBadRequest, "invalid job ID format")
+		jh.writeErrorWithCode(w, http.StatusBadRequest, "invalid job ID format", "INVALID_JOB_ID")
 		return
 	}
 
 	job, err := jh.repo.GetJobByID(r.Context(), jobID)
 	if err != nil {
 		jh.log.Error("failed to get job", "error", err, "job_id", jobID)
-		jh.writeError(w, http.StatusNotFound, "job not found")
+		jh.writeErrorWithCode(w, http.StatusNotFound, "job not found", "JOB_NOT_FOUND")
 		return
 	}
 
 	if job.Status != database.JobStatusSucceeded {
-		jh.writeError(w, http.StatusBadRequest,
-			fmt.Sprintf("job is not completed successfully, current status: %s", job.Status))
+		jh.writeErrorWithCode(w, http.StatusBadRequest,
+			fmt.Sprintf("job is not completed successfully, current status: %s", job.Status), "JOB_NOT_READY")
 		return
 	}
 
 	if job.ResultPath == "" {
-		jh.writeError(w, http.StatusNotFound, "result file not found")
+		jh.writeErrorWithCode(w, http.StatusNotFound, "result file not found", "RESULT_FILE_MISSING")
 		return
 	}
 
 	if !jh.fileStore.FileExists(job.ResultPath) {
-		jh.writeError(w, http.StatusNotFound, "result file not found on disk")
+		jh.writeErrorWithCode(w, http.StatusNotFound, "result file not found on disk", "RESULT_FILE_NOT_ON_DISK")
 		return
 	}
 
 	content, err := jh.fileStore.ReadFile(job.ResultPath)
 	if err != nil {
 		jh.log.Error("failed to read result file", "error", err, "job_id", jobID)
-		jh.writeError(w, http.StatusInternalServerError, "failed to read result file")
+		jh.writeErrorWithCode(w, http.StatusInternalServerError, "failed to read result file", "RESULT_FILE_READ_ERROR")
 		return
 	}
 
@@ -273,20 +300,36 @@ func (jh *Job) writeJSON(w http.ResponseWriter, statusCode int, data interface{}
 	}
 }
 
-func (jh *Job) writeError(w http.ResponseWriter, statusCode int, message string) {
+// writeError function removed - all calls now use writeErrorWithCode directly
+
+func (jh *Job) writeErrorWithCode(w http.ResponseWriter, statusCode int, message, errorCode string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	errorResponse := map[string]interface{}{
-		"error":     message,
-		"status":    statusCode,
-		"timestamp": time.Now().Unix(),
+	errorResp := errorResponse{
+		Error:     message,
+		ErrorCode: errorCode,
+		Status:    statusCode,
+		Timestamp: time.Now().Unix(),
 	}
 
-	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
-		jh.log.Error("failed to encode error response", "error", err, "status_code", statusCode, "message", message)
+	if err := json.NewEncoder(w).Encode(errorResp); err != nil {
+		jh.log.Error("failed to encode error response", "error", err, "status_code", statusCode, "message", message, "error_code", errorCode)
 		return
 	}
+}
+
+func (jh *Job) isValidTextFile(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	validExtensions := []string{".txt", ".md", ".csv", ".json", ".xml", ".log"}
+
+	for _, validExt := range validExtensions {
+		if ext == validExt {
+			return true
+		}
+	}
+
+	return false
 }
 
 func validateProcessingTypeAndParams(processingType database.ProcessingType, params map[string]any) error {
