@@ -1,6 +1,7 @@
 package filestore
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -27,11 +28,11 @@ type FileInfo struct {
 }
 
 func NewFileStore(uploadDir, resultDir string, maxSize int64) (*FileStore, error) {
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadDir, 0750); err != nil {
 		return nil, fmt.Errorf("create upload directory: %w", err)
 	}
 
-	if err := os.MkdirAll(resultDir, 0755); err != nil {
+	if err := os.MkdirAll(resultDir, 0750); err != nil {
 		return nil, fmt.Errorf("create result directory: %w", err)
 	}
 
@@ -49,7 +50,7 @@ func (fs *FileStore) SaveUploadedFile(fileHeader *multipart.FileHeader) (*FileIn
 	}
 
 	if !fs.isValidTextFile(fileHeader.Filename) {
-		return nil, fmt.Errorf("invalid file type: only text files are allowed")
+		return nil, errors.New("invalid file type: only text files are allowed")
 	}
 
 	file, err := fileHeader.Open()
@@ -71,7 +72,10 @@ func (fs *FileStore) SaveUploadedFile(fileHeader *multipart.FileHeader) (*FileIn
 
 	size, err := io.Copy(dst, file)
 	if err != nil {
-		os.Remove(storedPath)
+		if removeErr := os.Remove(storedPath); removeErr != nil {
+			// Log error but don't override the original error
+			_ = removeErr
+		}
 		return nil, fmt.Errorf("save file: %w", err)
 	}
 
@@ -88,7 +92,7 @@ func (fs *FileStore) SaveResultFile(jobID uuid.UUID, filename string, content []
 	resultName := fmt.Sprintf("%s_%s", jobID.String(), filename)
 	resultPath := filepath.Join(fs.resultDir, resultName)
 
-	if err := os.WriteFile(resultPath, content, 0644); err != nil {
+	if err := os.WriteFile(resultPath, content, 0600); err != nil {
 		return "", fmt.Errorf("save result file: %w", err)
 	}
 
@@ -97,7 +101,7 @@ func (fs *FileStore) SaveResultFile(jobID uuid.UUID, filename string, content []
 
 func (fs *FileStore) ReadFile(filePath string) ([]byte, error) {
 	if !fs.isValidPath(filePath) {
-		return nil, fmt.Errorf("invalid file path")
+		return nil, errors.New("invalid file path")
 	}
 
 	content, err := os.ReadFile(filePath)
@@ -119,7 +123,7 @@ func (fs *FileStore) FileExists(filePath string) bool {
 
 func (fs *FileStore) DeleteFile(filePath string) error {
 	if !fs.isValidPath(filePath) {
-		return fmt.Errorf("invalid file path")
+		return errors.New("invalid file path")
 	}
 
 	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
@@ -131,7 +135,7 @@ func (fs *FileStore) DeleteFile(filePath string) error {
 
 func (fs *FileStore) GetFileSize(filePath string) (int64, error) {
 	if !fs.isValidPath(filePath) {
-		return 0, fmt.Errorf("invalid file path")
+		return 0, errors.New("invalid file path")
 	}
 
 	info, err := os.Stat(filePath)
@@ -144,7 +148,7 @@ func (fs *FileStore) GetFileSize(filePath string) (int64, error) {
 
 func (fs *FileStore) GetFileModTime(filePath string) (time.Time, error) {
 	if !fs.isValidPath(filePath) {
-		return time.Time{}, fmt.Errorf("invalid file path")
+		return time.Time{}, errors.New("invalid file path")
 	}
 
 	info, err := os.Stat(filePath)

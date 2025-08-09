@@ -3,11 +3,9 @@ package database
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
 	"github.com/rsav/k8s-learning/internal/config"
 )
@@ -48,12 +46,8 @@ func (r *Repository) Close() error {
 }
 
 func (r *Repository) HealthCheck(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second) //nolint: mnd // Use a short timeout for health check
 	defer cancel()
 
 	return r.db.PingContext(ctx)
-}
-
-func closeQuietly(c io.Closer) {
-	_ = c.Close()
 }

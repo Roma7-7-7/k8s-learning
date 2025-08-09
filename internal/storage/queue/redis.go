@@ -20,6 +20,8 @@ const (
 	QueueHeartbeat = "workers:heartbeat"
 )
 
+const highPriorityThreshold = 5
+
 type SubmitJobMessage struct {
 	JobID          uuid.UUID               `json:"job_id"`
 	FilePath       string                  `json:"file_path"`
@@ -44,12 +46,14 @@ func NewRedisQueue(config config.Redis, logger *slog.Logger) (*RedisQueue, error
 		DB:       config.Database,
 	})
 
-	pingCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	pingCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) //nolint: mnd // Use a longer timeout for initial connection
 	defer cancel()
 
 	logger.DebugContext(pingCtx, "pinging Redis connection")
 	if err := client.Ping(pingCtx).Err(); err != nil {
-		client.Close()
+		if closeErr := client.Close(); closeErr != nil {
+			logger.ErrorContext(ctx, "failed to close Redis client", "error", closeErr)
+		}
 		return nil, fmt.Errorf("connect to Redis: %w", err)
 	}
 
@@ -64,7 +68,7 @@ func (rq *RedisQueue) PublishJob(ctx context.Context, message SubmitJobMessage) 
 	}
 
 	queueName := QueueMain
-	if message.Priority > 5 {
+	if message.Priority > highPriorityThreshold {
 		queueName = QueuePriority
 	}
 
@@ -105,6 +109,7 @@ func (rq *RedisQueue) GetAllQueuesLength(ctx context.Context) (map[string]int64,
 func (rq *RedisQueue) PublishToFailedQueue(ctx context.Context, message SubmitJobMessage, errorMsg string) error {
 	failedMessage := struct {
 		SubmitJobMessage
+
 		FailedAt     time.Time `json:"failed_at"`
 		ErrorMessage string    `json:"error_message"`
 		RetryCount   int       `json:"retry_count"`
@@ -140,7 +145,7 @@ func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string) e
 		return fmt.Errorf("marshal heartbeat: %w", err)
 	}
 
-	if err := rq.client.Set(ctx, key, data, 5*time.Minute).Err(); err != nil {
+	if err := rq.client.Set(ctx, key, data, 5*time.Minute).Err(); err != nil { //nolint: mnd // Use a reasonable expiration time for heartbeats
 		return fmt.Errorf("set worker heartbeat: %w", err)
 	}
 
@@ -207,7 +212,7 @@ func (rq *RedisQueue) CleanupStaleWorkers(ctx context.Context, maxAge time.Durat
 }
 
 func (rq *RedisQueue) HealthCheck(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second) //nolint: mnd// Use a short timeout for health checks
 	defer cancel()
 
 	return rq.client.Ping(ctx).Err()

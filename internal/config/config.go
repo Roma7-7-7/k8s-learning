@@ -1,8 +1,11 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -38,8 +41,9 @@ type Database struct {
 }
 
 func (dc Database) ConnectionString() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		dc.User, dc.Password, dc.Host, dc.Port, dc.Database, dc.SSLMode)
+	hostPort := net.JoinHostPort(dc.Host, strconv.Itoa(dc.Port))
+	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s",
+		dc.User, dc.Password, hostPort, dc.Database, dc.SSLMode)
 }
 
 type Redis struct {
@@ -103,7 +107,7 @@ func (c *API) Validate() error {
 
 	// Storage validation
 	if c.Storage.MaxFileSize <= 0 {
-		return fmt.Errorf("max file size must be positive")
+		return errors.New("max file size must be positive")
 	}
 
 	// SSL mode validation

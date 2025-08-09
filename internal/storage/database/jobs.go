@@ -43,13 +43,19 @@ func (p ProcessingType) String() string {
 	return string(p)
 }
 
-var ProcessingTypes = map[string]ProcessingType{
+//nolint:gochecknoglobals // processingTypes is a map of all valid processing types.
+var processingTypes = map[string]ProcessingType{
 	ProcessingTypeWordCount.String(): ProcessingTypeWordCount,
 	ProcessingTypeLineCount.String(): ProcessingTypeLineCount,
 	ProcessingTypeUppercase.String(): ProcessingTypeUppercase,
 	ProcessingTypeLowercase.String(): ProcessingTypeLowercase,
 	ProcessingTypeReplace.String():   ProcessingTypeReplace,
 	ProcessingTypeExtract.String():   ProcessingTypeExtract,
+}
+
+func ToProcessingType(pt string) (ProcessingType, bool) {
+	res, ok := processingTypes[pt]
+	return res, ok
 }
 
 const (
@@ -63,11 +69,17 @@ func (s JobStatus) String() string {
 	return string(s)
 }
 
-var JobStatuses = map[string]JobStatus{
+//nolint:gochecknoglobals // jobStatuses is a map of all valid job statuses.
+var jobStatuses = map[string]JobStatus{
 	JobStatusPending.String():   JobStatusPending,
 	JobStatusRunning.String():   JobStatusRunning,
 	JobStatusSucceeded.String(): JobStatusSucceeded,
 	JobStatusFailed.String():    JobStatusFailed,
+}
+
+func ToJobStatus(status string) (JobStatus, bool) {
+	res, ok := jobStatuses[status]
+	return res, ok
 }
 
 type GetJobsFilter struct {
@@ -98,7 +110,7 @@ func (r *Repository) GetJobs(ctx context.Context, req GetJobsFilter) ([]*Job, er
 	if err != nil {
 		return nil, fmt.Errorf("list jobs: %w", err)
 	}
-	defer closeQuietly(rows)
+	defer rows.Close()
 
 	var jobs []*Job
 	for rows.Next() {
@@ -196,7 +208,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, id uuid.UUID, status JobS
 			SET status = $1, completed_at = $2
 			WHERE id = $3`
 		args = []interface{}{status, now, id}
-	default:
+	case JobStatusPending:
 		query = `
 			UPDATE jobs 
 			SET status = $1

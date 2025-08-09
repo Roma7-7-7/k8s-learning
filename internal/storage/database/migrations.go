@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -34,11 +35,11 @@ func RunMigrations(db *sqlx.DB, logger *slog.Logger) error {
 	defer m.Close()
 
 	logger.DebugContext(ctx, "running pending migrations")
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 
-	if err == migrate.ErrNoChange {
+	if errors.Is(err, migrate.ErrNoChange) {
 		logger.InfoContext(ctx, "no new migrations to apply")
 	} else {
 		logger.InfoContext(ctx, "migrations completed successfully")

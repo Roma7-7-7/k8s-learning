@@ -48,7 +48,8 @@ func NewServer(cfg *config.API, log *slog.Logger) (*Server, error) {
 		return nil, fmt.Errorf("initialize Redis queue: %w", err)
 	}
 
-	log.DebugContext(ctx, "Initializing file store", "upload_dir", cfg.Storage.UploadDir, "result_dir", cfg.Storage.ResultDir, "max_file_size", cfg.Storage.MaxFileSize)
+	log.DebugContext(ctx, "Initializing file store",
+		"upload_dir", cfg.Storage.UploadDir, "result_dir", cfg.Storage.ResultDir, "max_file_size", cfg.Storage.MaxFileSize)
 	fileStore, err := filestore.NewFileStore(
 		cfg.Storage.UploadDir,
 		cfg.Storage.ResultDir,

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/rsav/k8s-learning/internal/api"
 	"github.com/rsav/k8s-learning/internal/config"
 )
@@ -14,7 +15,7 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("Failed to load configuration", "error", err)
+		slog.Error("Failed to load configuration", "error", err) //nolint:sloglint // we did not initialize the logger yet
 		os.Exit(1)
 	}
 

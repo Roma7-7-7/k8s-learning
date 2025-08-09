@@ -9,6 +9,8 @@
 - Use PascalCase for exported functions/types, camelCase for unexported
 - Keep functions small and focused on a single responsibility
 - Don't add package name to struct name (e.g., `User` instead of `UserModel` or `ModelUser` if part of `model` package)
+- Run `make lint` before committing to ensure code quality and consistency
+- Use `golangci-lint` for comprehensive code analysis and style checking
 
 ### Error Handling
 - Always handle errors explicitly - never ignore them
@@ -173,8 +175,26 @@ After completing each significant task or implementation milestone:
    - Include both implementation and documentation updates in commits
    - Update any relevant phase completion status
 
+## Development Commands
+
+### Core Development Workflow
+```bash
+make fmt          # Format Go code
+make lint         # Run golangci-lint for code quality checks  
+make test         # Run all tests
+make build        # Build all binaries
+make all          # Format, lint, test, and build
+```
+
+### Code Quality
+- Always run `make lint` before committing changes
+- Use `make fmt` to format code according to Go standards
+- Run `make test-coverage` to ensure adequate test coverage
+- The project uses golangci-lint with comprehensive rules defined in `.golangci.yml`
+
 ## Code Review Checklist
 When reviewing or suggesting changes, ensure:
+- [ ] Code passes `make lint` without errors
 - [ ] Proper error handling
 - [ ] Context usage for cancellation
 - [ ] Resource cleanup (defer statements)

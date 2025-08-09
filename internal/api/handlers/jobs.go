@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -34,6 +35,8 @@ type (
 	}
 )
 
+const memoryLimit = 32 << 20 // 32 MB limit
+
 func NewJob(repo Repository, queue Queue, fileStore FileStorage, logger *slog.Logger) *Job {
 	return &Job{
 		repo:      repo,
@@ -49,7 +52,7 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(memoryLimit); err != nil {
 		jh.log.Error("failed to parse multipart form", "error", err)
 		jh.writeError(w, http.StatusBadRequest, "failed to parse form")
 		return
@@ -63,7 +66,7 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = file.Close()
 
-	processingType, ok := database.ProcessingTypes[r.FormValue("processing_type")]
+	processingType, ok := database.ToProcessingType(r.FormValue("processing_type"))
 	if !ok {
 		jh.writeError(w, http.StatusBadRequest, "invalid processing_type")
 		return
@@ -168,14 +171,15 @@ func (jh *Job) ListJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var err error
+	//nolint:mnd // we need to initialize the filter with default values
 	filter := database.GetJobsFilter{
-		Limit:  100, // Default limit
-		Offset: 0,   // Default offset
+		Limit:  100,
+		Offset: 0,
 	}
 
 	if statusStr := r.URL.Query().Get("status"); statusStr != "" {
 		var ok bool
-		filter.Status, ok = database.JobStatuses[statusStr]
+		filter.Status, ok = database.ToJobStatus(statusStr)
 		if !ok {
 			jh.writeError(w, http.StatusBadRequest, "invalid job status")
 			return
@@ -310,23 +314,25 @@ func validateProcessingTypeAndParams(processingType database.ProcessingType, par
 	case database.ProcessingTypeReplace:
 		find, ok := params["find"]
 		if !ok || find == "" {
-			return fmt.Errorf("replace operation requires 'find' parameter")
+			return errors.New("replace operation requires 'find' parameter")
 		}
 		replaceWith, ok := params["replace_with"]
 		if !ok {
-			return fmt.Errorf("replace operation requires 'replace_with' parameter")
+			return errors.New("replace operation requires 'replace_with' parameter")
 		}
 		if _, ok := replaceWith.(string); !ok {
-			return fmt.Errorf("'replace_with' parameter must be a string")
+			return errors.New("'replace_with' parameter must be a string")
 		}
 	case database.ProcessingTypeExtract:
 		pattern, ok := params["pattern"]
 		if !ok || pattern == "" {
-			return fmt.Errorf("extract operation requires 'pattern' parameter")
+			return errors.New("extract operation requires 'pattern' parameter")
 		}
 		if _, ok := pattern.(string); !ok {
-			return fmt.Errorf("'pattern' parameter must be a string")
+			return errors.New("'pattern' parameter must be a string")
 		}
+	case database.ProcessingTypeWordCount, database.ProcessingTypeLineCount, database.ProcessingTypeUppercase, database.ProcessingTypeLowercase:
+		// These processing types do not require additional parameters
 	}
 	return nil
 }

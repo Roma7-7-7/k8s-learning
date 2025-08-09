@@ -2,16 +2,18 @@ package middleware
 
 import (
 	"bufio"
-	"fmt"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
 
 type responseWriter struct {
 	http.ResponseWriter
+
 	statusCode int
 	written    int64
 }
@@ -33,7 +35,7 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	hijacker, ok := rw.ResponseWriter.(http.Hijacker)
 	if !ok {
-		return nil, nil, fmt.Errorf("responseWriter does not implement http.Hijacker")
+		return nil, nil, errors.New("responseWriter does not implement http.Hijacker")
 	}
 	return hijacker.Hijack()
 }
@@ -179,7 +181,7 @@ func getClientIP(r *http.Request) string {
 }
 
 func generateRequestID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	return strconv.FormatInt(time.Now().UnixNano(), 10)
 }
 
 func Chain(middlewares ...func(http.Handler) http.Handler) func(http.Handler) http.Handler {
