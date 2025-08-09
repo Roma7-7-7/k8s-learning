@@ -8,18 +8,25 @@
 - Prefer short, descriptive names for local variables
 - Use PascalCase for exported functions/types, camelCase for unexported
 - Keep functions small and focused on a single responsibility
+- Don't add package name to struct name (e.g., `User` instead of `UserModel` or `ModelUser` if part of `model` package)
+- Run `make lint` before committing to ensure code quality and consistency
+- Use `golangci-lint` for comprehensive code analysis and style checking
 
 ### Error Handling
 - Always handle errors explicitly - never ignore them
 - Use wrapped errors with `fmt.Errorf("operation: %w", err)` for context
+- Do not use `fmt.Errorf("failed to do something: %v", err)` - prefer simple `fmt.Errorf("to do something: %w", err)`
 - Return errors as the last return value
 - Prefer custom error types for domain-specific errors
+- Use `errors.Is` and `errors.As` for error checking
 
 ### Dependencies
 - Prefer standard library when possible
 - Use Go modules for dependency management
 - Pin specific versions in go.mod for reproducible builds
 - Avoid external dependencies for simple tasks
+- Use github.com/kelseyhightower/envconfig for environment variable configuration
+- Use github.com/golang-migrate/migrate for database migrations
 
 ### Testing
 - Write table-driven tests when testing multiple scenarios
@@ -28,6 +35,7 @@
 - Mock external dependencies using interfaces
 - Aim for >80% test coverage on business logic
 - Place tests in `*_test.go` files in the same package
+- Skip tests for simple models/structs - focus on business logic and handlers
 
 ### Architecture Preferences
 - Use dependency injection for better testability
@@ -53,7 +61,9 @@
 - Use sqlx for database operations
 - Always use prepared statements
 - Handle database transactions explicitly
-- Use migrations for schema changes
+- Use golang-migrate for database migrations with numbered files: `000001_description.up.sql` and `000001_description.down.sql`
+- Run migrations automatically during API service startup
+- Store migrations in the `migrations/` directory at project root
 
 ### API Design
 - Follow RESTful conventions
@@ -62,9 +72,10 @@
 - Return consistent error response format
 
 ### Configuration
-- Use environment variables for configuration
-- Provide sensible defaults
-- Validate configuration on startup
+- Use environment variables for configuration with envconfig struct tags
+- Provide sensible defaults via `default:` struct tags
+- Validate configuration on startup after environment processing
+- Use clear environment variable naming (e.g., DB_HOST, REDIS_PORT)
 
 ## Don'ts
 - Don't use `panic()` for normal error conditions
@@ -143,8 +154,47 @@
 - Implement basic client-side validation
 - Use HTTP status codes appropriately
 
+## Task Completion Protocol
+
+After completing each significant task or implementation milestone:
+
+1. **Update CLAUDE.md**:
+   - Add any new build commands or development workflows
+   - Update project-specific rules if patterns emerge
+   - Document any new dependencies or architectural decisions
+   - Add to the Code Review Checklist if new patterns are established
+
+2. **Update README.md** (if necessary):
+   - Update build status or completion phases
+   - Add new API endpoints or features to documentation
+   - Update deployment instructions if changed
+   - Modify architecture diagrams if significant changes made
+
+3. **Commit Changes**:
+   - Use descriptive commit messages following conventional commits
+   - Include both implementation and documentation updates in commits
+   - Update any relevant phase completion status
+
+## Development Commands
+
+### Core Development Workflow
+```bash
+make fmt          # Format Go code
+make lint         # Run golangci-lint for code quality checks  
+make test         # Run all tests
+make build        # Build all binaries
+make all          # Format, lint, test, and build
+```
+
+### Code Quality
+- Always run `make lint` before committing changes
+- Use `make fmt` to format code according to Go standards
+- Run `make test-coverage` to ensure adequate test coverage
+- The project uses golangci-lint with comprehensive rules defined in `.golangci.yml`
+
 ## Code Review Checklist
 When reviewing or suggesting changes, ensure:
+- [ ] Code passes `make lint` without errors
 - [ ] Proper error handling
 - [ ] Context usage for cancellation
 - [ ] Resource cleanup (defer statements)
@@ -155,3 +205,4 @@ When reviewing or suggesting changes, ensure:
 - [ ] K8s resources have proper labels and resource limits
 - [ ] Web UI is accessible and responsive
 - [ ] No unnecessary JavaScript dependencies
+- [ ] Documentation updated (CLAUDE.md and README.md if needed)

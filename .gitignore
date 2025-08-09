@@ -23,11 +23,21 @@ profile.cov
 # Go workspace file
 go.work
 go.work.sum
+vendor/
 
 # env file
 .env
+
+# HTTP client environment files (private)
+http-client.private.env.json
 
 # Editor/IDE
 .idea/
 .vscode/
 
+# Build
+build/
+
+# Local development directories
+uploads/
+results/
