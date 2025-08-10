@@ -22,14 +22,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	log := setupLogger(cfg.Logging)
-
-	os.Exit(runWithShutdown(cfg, log))
+	os.Exit(runWithShutdown(cfg))
 }
 
-func runWithShutdown(cfg *config.Worker, log *slog.Logger) int {
+func runWithShutdown(cfg *config.Worker) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	log := setupLogger(cfg.Logging)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
