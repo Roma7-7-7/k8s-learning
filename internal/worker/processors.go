@@ -16,13 +16,13 @@ import (
 
 type TextProcessor struct {
 	resultDir string
-	logger    *slog.Logger
+	log       *slog.Logger
 }
 
 func NewTextProcessor(resultDir string, logger *slog.Logger) *TextProcessor {
 	return &TextProcessor{
 		resultDir: resultDir,
-		logger:    logger,
+		log:       logger,
 	}
 }
 
@@ -38,7 +38,7 @@ func (tp *TextProcessor) CanProcess(processingType database.ProcessingType) bool
 }
 
 func (tp *TextProcessor) Process(ctx context.Context, job *ProcessingJob) (string, error) {
-	tp.logger.InfoContext(ctx, "processing text job",
+	tp.log.InfoContext(ctx, "processing text job",
 		"job_id", job.JobID,
 		"processing_type", job.ProcessingType,
 		"file_path", job.FilePath)

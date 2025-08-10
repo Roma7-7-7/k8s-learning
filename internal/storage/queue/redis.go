@@ -35,13 +35,13 @@ type SubmitJobMessage struct {
 
 type RedisQueue struct {
 	client *redis.Client
-	logger *slog.Logger
+	log    *slog.Logger
 }
 
-func NewRedisQueue(config config.Redis, logger *slog.Logger) (*RedisQueue, error) {
+func NewRedisQueue(config config.Redis, log *slog.Logger) (*RedisQueue, error) {
 	ctx := context.Background()
 
-	logger.InfoContext(ctx, "connecting to Redis", "host", config.Host, "port", config.Port, "db", config.Database)
+	log.InfoContext(ctx, "connecting to Redis", "host", config.Host, "port", config.Port, "db", config.Database)
 
 	client := redis.NewClient(&redis.Options{
 		Addr:     config.Address(),
@@ -52,16 +52,16 @@ func NewRedisQueue(config config.Redis, logger *slog.Logger) (*RedisQueue, error
 	pingCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) //nolint: mnd // Use a longer timeout for initial connection
 	defer cancel()
 
-	logger.DebugContext(pingCtx, "pinging Redis connection")
+	log.DebugContext(pingCtx, "pinging Redis connection")
 	if err := client.Ping(pingCtx).Err(); err != nil {
 		if closeErr := client.Close(); closeErr != nil {
-			logger.ErrorContext(ctx, "failed to close Redis client", "error", closeErr)
+			log.ErrorContext(ctx, "failed to close Redis client", "error", closeErr)
 		}
 		return nil, fmt.Errorf("connect to Redis: %w", err)
 	}
 
-	logger.InfoContext(ctx, "Redis connection established successfully")
-	return &RedisQueue{client: client, logger: logger}, nil
+	log.InfoContext(ctx, "Redis connection established successfully")
+	return &RedisQueue{client: client, log: log}, nil
 }
 
 func (rq *RedisQueue) PublishJob(ctx context.Context, message SubmitJobMessage) error {
@@ -75,14 +75,14 @@ func (rq *RedisQueue) PublishJob(ctx context.Context, message SubmitJobMessage) 
 		queueName = QueuePriority
 	}
 
-	rq.logger.DebugContext(ctx, "publishing job to queue", "job_id", message.JobID, "queue", queueName, "processing_type", message.ProcessingType)
+	rq.log.DebugContext(ctx, "publishing job to queue", "job_id", message.JobID, "queue", queueName, "processing_type", message.ProcessingType)
 
 	if err := rq.client.LPush(ctx, queueName, data).Err(); err != nil {
-		rq.logger.ErrorContext(ctx, "failed to publish job to queue", "job_id", message.JobID, "queue", queueName, "error", err)
+		rq.log.ErrorContext(ctx, "failed to publish job to queue", "job_id", message.JobID, "queue", queueName, "error", err)
 		return fmt.Errorf("publish job to queue: %w", err)
 	}
 
-	rq.logger.InfoContext(ctx, "job published successfully", "job_id", message.JobID, "queue", queueName)
+	rq.log.InfoContext(ctx, "job published successfully", "job_id", message.JobID, "queue", queueName)
 	return nil
 }
 
@@ -128,14 +128,14 @@ func (rq *RedisQueue) ConsumeJob(ctx context.Context, timeout time.Duration) (*S
 	queueName := result[0]
 	jobData := result[1]
 
-	rq.logger.DebugContext(ctx, "consumed job from queue", "queue", queueName, "data_length", len(jobData))
+	rq.log.DebugContext(ctx, "consumed job from queue", "queue", queueName, "data_length", len(jobData))
 
 	var message SubmitJobMessage
 	if err := json.Unmarshal([]byte(jobData), &message); err != nil {
 		return nil, fmt.Errorf("unmarshal job message: %w", err)
 	}
 
-	rq.logger.InfoContext(ctx, "job consumed successfully", "job_id", message.JobID, "queue", queueName)
+	rq.log.InfoContext(ctx, "job consumed successfully", "job_id", message.JobID, "queue", queueName)
 	return &message, nil
 }
 

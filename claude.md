@@ -11,6 +11,7 @@
 - Don't add package name to struct name (e.g., `User` instead of `UserModel` or `ModelUser` if part of `model` package)
 - Run `make lint` before committing to ensure code quality and consistency
 - Use `golangci-lint` for comprehensive code analysis and style checking
+- Use `log` instead of `logger` to define logger struct field, arguments and parameters
 
 ### Error Handling
 - Always handle errors explicitly - never ignore them
