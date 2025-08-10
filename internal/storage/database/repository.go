@@ -19,10 +19,10 @@ type Repository struct {
 // JSONB handles PostgreSQL JSONB columns by implementing sql.Scanner and driver.Valuer.
 type JSONB map[string]any
 
-func NewRepository(conf config.Database, logger *slog.Logger) (*Repository, error) {
+func NewRepository(conf config.Database, log *slog.Logger) (*Repository, error) {
 	ctx := context.Background()
 
-	logger.InfoContext(ctx, "connecting to PostgreSQL database", "host", conf.Host, "port", conf.Port, "database", conf.Database)
+	log.InfoContext(ctx, "connecting to PostgreSQL database", "host", conf.Host, "port", conf.Port, "database", conf.Database)
 
 	db, err := sqlx.Connect("pgx", conf.ConnectionString())
 	if err != nil {
@@ -33,10 +33,10 @@ func NewRepository(conf config.Database, logger *slog.Logger) (*Repository, erro
 	db.SetMaxIdleConns(conf.MaxIdle)
 	db.SetConnMaxLifetime(time.Hour)
 
-	logger.DebugContext(ctx, "connection pool configured", "max_conns", conf.MaxConns, "max_idle", conf.MaxIdle)
+	log.DebugContext(ctx, "connection pool configured", "max_conns", conf.MaxConns, "max_idle", conf.MaxIdle)
 
-	logger.InfoContext(ctx, "running database migrations")
-	if err := RunMigrations(conf.ConnectionString(), logger); err != nil {
+	log.InfoContext(ctx, "running database migrations")
+	if err := RunMigrations(conf.ConnectionString(), log); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
