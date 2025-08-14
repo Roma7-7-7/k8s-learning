@@ -107,6 +107,12 @@
 - Use Ingress for external HTTP/HTTPS access
 - Set appropriate service ports and target ports
 
+### Ingress Configuration
+- For API routing with path prefixes (e.g., `/api`), use `ImplementationSpecific` pathType for proper pattern matching
+- When routing `/api/*` to backend services, ensure the backend expects the correct path structure
+- Test ingress routing thoroughly, especially when mixing web UI and API services
+- Use `kubectl describe ingress` to verify routing rules are applied correctly
+
 ### YAML Structure
 ```yaml
 # Prefer this organization:

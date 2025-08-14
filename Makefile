@@ -116,6 +116,7 @@ k8s-delete:
 k8s-load-images:
 	minikube image load k8s-learning/api:dev
 	minikube image load k8s-learning/worker:dev
+	minikube image load k8s-learning/web:dev
 
 # Complete local K8s workflow (build, load, deploy)
 k8s-local: k8s-build k8s-load-images k8s-deploy
@@ -144,6 +145,9 @@ k8s-logs:
 	@echo ""
 	@echo "=== Worker Logs ==="
 	kubectl logs -l app=worker -n k8s-learning --tail=50
+	@echo ""
+	@echo "=== Web Logs ==="
+	kubectl logs -l app=web -n k8s-learning --tail=20
 	@echo ""
 	@echo "=== Postgres Logs ==="
 	kubectl logs -l app=postgres -n k8s-learning --tail=20

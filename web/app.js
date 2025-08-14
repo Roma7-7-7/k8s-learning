@@ -1,5 +1,37 @@
-// API Base URL - adjust this to match your API server
-const API_BASE_URL = 'http://localhost:8080';
+// API Base URL - auto-detect environment
+function getApiBaseUrl() {
+    // Check if we're running via file:// protocol (local development)
+    if (window.location.protocol === 'file:') {
+        return 'http://localhost:8080/api';
+    }
+    
+    // Check if we're running on localhost with a port (local development)
+    const isLocalDev = window.location.hostname === 'localhost' || 
+                       window.location.hostname === '127.0.0.1' || 
+                       window.location.hostname === '';
+    
+    if (isLocalDev) {
+        const port = window.location.port;
+        
+        // If we're on a port other than 8080, assume we're running web files directly
+        // (e.g., Live Server on port 5500, http-server on port 8000, etc.)
+        if (port && port !== '8080') {
+            return 'http://localhost:8080/api';
+        }
+        
+        // If we're on localhost:8080, check if we're going through ingress
+        // Ingress will typically serve everything under root, but API under /api
+        if (port === '8080' || !port) {
+            return '/api';
+        }
+    }
+    
+    // For K8s deployment or any other scenario, use relative path
+    return '/api';
+}
+
+const API_BASE_URL = getApiBaseUrl();
+console.log('Using API Base URL:', API_BASE_URL);
 
 // Global state
 let currentJobs = [];
@@ -138,7 +170,7 @@ async function handleJobSubmission(e) {
             formData.append('parameters', JSON.stringify(parameters));
         }
         
-        const response = await fetch(`${API_BASE_URL}/api/v1/jobs`, {
+        const response = await fetch(`${API_BASE_URL}/v1/jobs`, {
             method: 'POST',
             body: formData
         });
@@ -169,7 +201,7 @@ async function handleJobSubmission(e) {
 
 async function checkHealth() {
     try {
-        const response = await fetch(`${API_BASE_URL}/health`);
+        const response = await fetch(`${API_BASE_URL.replace(/\/api$/, '')}/health`);
         if (response.ok) {
             healthIndicator.className = 'indicator healthy';
             healthText.textContent = 'Service Healthy';
@@ -177,8 +209,17 @@ async function checkHealth() {
             throw new Error('Health check failed');
         }
     } catch (error) {
+        console.warn('API health check failed:', error.message);
+        console.log('Current API_BASE_URL:', API_BASE_URL);
+        console.log('Current location:', window.location.href);
+        
         healthIndicator.className = 'indicator unhealthy';
         healthText.textContent = 'Service Unavailable';
+        
+        // If we're in development and the API is not available, show helpful message
+        if (API_BASE_URL.startsWith('http://localhost:8080')) {
+            console.log('💡 Tip: Make sure your API is running on localhost:8080 or use port forwarding for K8s');
+        }
     }
 }
 
@@ -189,7 +230,7 @@ async function loadJobs() {
         if (status) params.append('status', status);
         params.append('limit', '50');
         
-        const response = await fetch(`${API_BASE_URL}/api/v1/jobs?${params}`);
+        const response = await fetch(`${API_BASE_URL}/v1/jobs?${params}`);
         
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
@@ -230,7 +271,7 @@ function renderJobs() {
 
 async function showJobDetails(jobId) {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/jobs/${jobId}`);
+        const response = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`);
         
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
@@ -313,7 +354,7 @@ async function handleDownloadResult() {
     const jobId = downloadResultBtn.dataset.jobId;
     
     try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/jobs/${jobId}/result`);
+        const response = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}/result`);
         
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));

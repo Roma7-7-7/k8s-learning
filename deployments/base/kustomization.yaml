@@ -9,6 +9,8 @@ resources:
 - redis/redis.yaml
 - api/api.yaml
 - worker/worker.yaml
+- web/web.yaml
+- ingress.yaml
 
 commonLabels:
   project: k8s-learning
