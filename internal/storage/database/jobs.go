@@ -22,6 +22,7 @@ type (
 		ProcessingType   ProcessingType `json:"processing_type" db:"processing_type"`
 		Parameters       JSONB          `json:"parameters" db:"parameters"`
 		Status           JobStatus      `json:"status" db:"status"`
+		DelayMS          int            `json:"delay_ms" db:"delay_ms"`
 		ResultPath       string         `json:"result_path,omitempty" db:"result_path"`
 		ErrorMessage     string         `json:"error_message,omitempty" db:"error_message"`
 		CreatedAt        time.Time      `json:"created_at" db:"created_at"`
@@ -99,6 +100,7 @@ var jobSelectColumns = []string{
 	"processing_type",
 	"parameters",
 	"status",
+	"delay_ms",
 	"COALESCE(result_path, '') as result_path",
 	"COALESCE(error_message, '') as error_message",
 	"created_at",
@@ -219,9 +221,9 @@ func (r *Repository) CountJobsByStatus(ctx context.Context, status JobStatus) (i
 func (r *Repository) CreateJob(ctx context.Context, job *Job) error {
 	sqlQuery, args, err := psql.Insert("jobs").
 		Columns("id", "original_filename", "file_path", "processing_type",
-			"parameters", "status", "created_at").
+			"parameters", "status", "delay_ms", "created_at").
 		Values(job.ID, job.OriginalFilename, job.FilePath, job.ProcessingType,
-			job.Parameters, job.Status, job.CreatedAt).
+			job.Parameters, job.Status, job.DelayMS, job.CreatedAt).
 		ToSql()
 	if err != nil {
 		return fmt.Errorf("build query: %w", err)
