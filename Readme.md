@@ -154,8 +154,10 @@ text-processing-queue/
 │   │   └── main.go                 # API server entrypoint
 │   ├── worker/
 │   │   └── main.go                 # Worker entrypoint
-│   └── controller/
-│       └── main.go                 # Controller entrypoint
+│   ├── controller/
+│   │   └── main.go                 # Controller entrypoint
+│   └── stress-test/
+│       └── main.go                 # Stress testing tool
 ├── internal/
 │   ├── api/
 │   │   ├── handlers/               # HTTP handlers
@@ -190,6 +192,8 @@ text-processing-queue/
 │   ├── setup-cluster.sh            # Local development setup
 │   ├── build-images.sh             # Docker image building
 │   └── deploy.sh                   # Deployment automation
+├── test-files/
+│   └── sample.txt                  # Sample files for testing
 ├── docs/
 │   ├── api.md                      # API documentation
 │   ├── deployment.md               # Deployment guide
@@ -233,15 +237,66 @@ text-processing-queue/
 }
 ```
 
-### Stress Testing Support
+## Stress Testing
 
-For performance testing and load analysis, jobs support an optional delay parameter:
+The system includes comprehensive stress testing capabilities for performance analysis and load testing.
+
+### Built-in Stress Test Tool
+
+A dedicated stress testing tool (`cmd/stress-test`) provides automated load testing with configurable parameters:
+
+**Features:**
+- Concurrent request generation with configurable worker count
+- Randomized processing delays to simulate varying workloads
+- Comprehensive metrics collection (latency, throughput, error rates)
+- File upload simulation with real multipart form data
+- Test duration control and graceful termination
+
+**Quick Usage:**
+```bash
+# Build and run with default parameters (30s duration, 2 concurrent workers)
+make run-stress-test
+
+# Run against local minikube deployment (requires minikube tunnel)
+make run-stress-test-k8s
+
+# Build the stress test tool only
+make build-stress-test
+
+# Run with custom parameters
+./build/stress-test --file test-files/sample.txt \
+  --duration 60 \
+  --concurrency 5 \
+  --min-process-delay 1000 \
+  --max-process-delay 5000 \
+  --query-delay 50
+```
+
+**Command Line Options:**
+- `--file` - Path to test file (required)
+- `--min-process-delay` - Min processing delay in ms (default: 0)
+- `--max-process-delay` - Max processing delay in ms (default: 30000)
+- `--concurrency` - Number of concurrent requests (default: 1)
+- `--query-delay` - Delay between requests in ms (default: 10)
+- `--duration` - Test duration in seconds (default: 60)
+- `--api-endpoint` - API endpoint URL (default: "http://localhost:8080/api/v1/jobs")
+
+**Metrics Provided:**
+- Total requests sent and success/failure rates
+- Average, minimum, and maximum response latency
+- Requests per second throughput
+- Error breakdown by HTTP status code
+- Test configuration summary
+
+### API Delay Parameter Support
+
+For granular performance testing, the API supports an optional delay parameter in job submissions:
 
 - **delay_ms**: Optional integer parameter (0-60000) that adds artificial processing delay
 - Useful for simulating longer-running tasks and testing queue behavior under load
-- Example: `delay_ms=5000` adds a 5-second delay before actual text processing begins
+- Applied at the worker level before actual text processing begins
 
-#### Usage Examples
+**Usage Examples:**
 ```bash
 # Standard job submission (no delay)
 curl -X POST "http://localhost:8080/api/v1/jobs" \
@@ -253,6 +308,26 @@ curl -X POST "http://localhost:8080/api/v1/jobs" \
   -F "file=@sample.txt" \
   -F "processing_type=wordcount" \
   -F "delay_ms=5000"
+```
+
+### Stress Testing Scenarios
+
+**Queue Depth Testing:**
+```bash
+# High concurrency with delays to build queue backlog
+./build/stress-test --concurrency 10 --min-process-delay 5000 --max-process-delay 10000 --duration 120
+```
+
+**Throughput Testing:**
+```bash
+# Maximum throughput with minimal delays
+./build/stress-test --concurrency 20 --max-process-delay 100 --query-delay 1 --duration 60
+```
+
+**Latency Analysis:**
+```bash
+# Low concurrency for baseline latency measurement
+./build/stress-test --concurrency 1 --max-process-delay 1000 --duration 300
 ```
 
 
@@ -341,7 +416,7 @@ Multi-stage Docker builds with:
 
 ### Job Management
 - `POST /api/v1/jobs` - Submit text processing job with file upload (supports optional `delay_ms` parameter for stress testing)
-- `GET /api/v1/jobs/{id}` - Get job status and details (includes delay information)
+- `GET /api/v1/jobs/{id}` - Get job status and details
 - `GET /api/v1/jobs` - List jobs with pagination
 - `GET /api/v1/jobs/{id}/result` - Download processed result file
 
@@ -600,15 +675,17 @@ The HTTP client provides a complete testing environment without requiring extern
 - `make deps` - Download and tidy dependencies
 
 ### Building
-- `make build` - Build all binaries (api, worker, controller)
+- `make build` - Build all binaries (api, worker, controller, stress-test)
 - `make build-api` - Build API service only
 - `make build-worker` - Build worker service only
 - `make build-controller` - Build controller service only
+- `make build-stress-test` - Build stress test tool only
 
 ### Running Services
 - `make run-api` - Build and run API service
 - `make run-worker` - Build and run worker service
 - `make run-controller` - Build and run controller service
+- `make run-stress-test` - Build and run stress test with default parameters
 
 ### Docker
 - `make docker-build` - Build all Docker images
@@ -627,6 +704,7 @@ The HTTP client provides a complete testing environment without requiring extern
 
 ### Testing
 - `make test-coverage` - Run tests with coverage report
+- `make run-stress-test` - Run load/stress testing with default configuration
 
 ### Cleanup
 - `make clean` - Clean build artifacts
