@@ -236,6 +236,22 @@ text-processing-queue/
 
 ### ✅ Completed Components
 
+#### **Web UI (`text-ui`)**
+Static web interface with:
+- Simple HTML/CSS/JavaScript implementation
+- File upload form for job submission
+- Job status monitoring and results display
+- Integration with API endpoints
+- Nginx-based serving with proper routing
+- Kubernetes deployment with ClusterIP service
+
+#### **Ingress Configuration**
+External access routing with:
+- Nginx ingress controller support
+- Path-based routing (`/api` → API service, `/` → Web UI)
+- Proper route separation for API and UI traffic
+- Local development via `minikube tunnel`
+
 #### **API Service (`text-api`)**
 Full REST API implementation with:
 - Job submission and status endpoints (`POST /api/v1/jobs`, `GET /api/v1/jobs/{id}`)
@@ -287,7 +303,6 @@ Multi-stage Docker builds with:
 
 ### 🚧 In Progress
 - **Controller (`text-controller`)**: Kubernetes controller for custom resources and auto-scaling
-- **Web UI (`text-ui`)**: Static web interface for job submission and monitoring
 
 ### 📋 Pending
 - **Production Configuration**: Helm charts for production deployments
@@ -685,8 +700,11 @@ Migrations use environment-specific paths:
 - `api-service:8080` - API service (accessed via port-forward)
 
 **External Access:**
-- Use `kubectl port-forward svc/api-service 8080:8080 -n k8s-learning` 
-- Or configure Ingress for production deployments
+- **Development**: Use `minikube tunnel` with ingress configuration
+  - API available at `http://localhost/api/*`
+  - Web UI available at `http://localhost/`
+- **Alternative**: Use `kubectl port-forward svc/api-service 8080:8080 -n k8s-learning` for API-only access
+- **Production**: Configure proper Ingress with domain names and TLS
 
 ### Resource Management
 

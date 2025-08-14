@@ -25,6 +25,14 @@ patches:
 
 - patch: |-
     - op: replace
+      path: /spec/template/spec/containers/0/image
+      value: k8s-learning/web:dev
+  target:
+    kind: Deployment
+    name: web
+
+- patch: |-
+    - op: replace
       path: /data/LOG_LEVEL
       value: debug
   target:
