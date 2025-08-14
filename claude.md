@@ -161,6 +161,31 @@
 - Implement basic client-side validation
 - Use HTTP status codes appropriately
 
+## Stress Testing Support
+
+### Delay Parameter
+The API now supports an optional `delay_ms` parameter for stress testing:
+- **Parameter**: `delay_ms` (integer, 0-60000 milliseconds)
+- **Purpose**: Simulates longer-running tasks to test queue behavior under load
+- **Implementation**: Worker sleeps for specified duration before starting actual text processing
+- **Database**: Stored in `jobs.delay_ms` column for tracking and analysis
+- **Validation**: Input validation ensures delays are within reasonable bounds (max 1 minute)
+
+### Usage
+```bash
+# Submit job with 5-second processing delay
+curl -X POST "http://localhost:8080/api/v1/jobs" \
+  -F "file=@test.txt" \
+  -F "processing_type=wordcount" \
+  -F "delay_ms=5000"
+```
+
+### Implementation Details
+- Delay is applied at the beginning of worker processing, before actual text operations
+- Uses context-aware sleep to support graceful cancellation
+- Logged for debugging and monitoring purposes
+- API response includes delay value for verification
+
 ## Task Completion Protocol
 
 After completing each significant task or implementation milestone:

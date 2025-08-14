@@ -106,6 +106,7 @@ CREATE TABLE jobs (
     processing_type VARCHAR(100) NOT NULL,
     parameters JSONB,
     status VARCHAR(50) DEFAULT 'pending',
+    delay_ms INTEGER DEFAULT 0,
     result_path VARCHAR(500),
     error_message TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
@@ -117,6 +118,7 @@ CREATE TABLE jobs (
 -- Index for efficient queries
 CREATE INDEX idx_jobs_status ON jobs(status);
 CREATE INDEX idx_jobs_created_at ON jobs(created_at);
+CREATE INDEX idx_jobs_delay_ms ON jobs(delay_ms);
 ```
 
 **Kubernetes Resources**:
@@ -231,6 +233,28 @@ text-processing-queue/
 }
 ```
 
+### Stress Testing Support
+
+For performance testing and load analysis, jobs support an optional delay parameter:
+
+- **delay_ms**: Optional integer parameter (0-60000) that adds artificial processing delay
+- Useful for simulating longer-running tasks and testing queue behavior under load
+- Example: `delay_ms=5000` adds a 5-second delay before actual text processing begins
+
+#### Usage Examples
+```bash
+# Standard job submission (no delay)
+curl -X POST "http://localhost:8080/api/v1/jobs" \
+  -F "file=@sample.txt" \
+  -F "processing_type=wordcount"
+
+# Job with 5-second delay for stress testing
+curl -X POST "http://localhost:8080/api/v1/jobs" \
+  -F "file=@sample.txt" \
+  -F "processing_type=wordcount" \
+  -F "delay_ms=5000"
+```
+
 
 ## Implementation Status
 
@@ -270,6 +294,7 @@ Full REST API implementation with:
 Background job processor with:
 - Redis queue consumer implementation
 - Text processing capabilities (word count, line count, case conversion, find/replace, extract)
+- Configurable processing delays for stress testing (0-60 second delay support)
 - Database status updates
 - File processing and result storage
 - Worker heartbeat and health tracking
@@ -315,8 +340,8 @@ Multi-stage Docker builds with:
 ## API Endpoints
 
 ### Job Management
-- `POST /api/v1/jobs` - Submit text processing job with file upload
-- `GET /api/v1/jobs/{id}` - Get job status and details
+- `POST /api/v1/jobs` - Submit text processing job with file upload (supports optional `delay_ms` parameter for stress testing)
+- `GET /api/v1/jobs/{id}` - Get job status and details (includes delay information)
 - `GET /api/v1/jobs` - List jobs with pagination
 - `GET /api/v1/jobs/{id}/result` - Download processed result file
 
@@ -491,6 +516,26 @@ Your test content here
 Content-Disposition: form-data; name="processing_type"
 
 wordcount
+--WebAppBoundary--
+
+### Create a job with processing delay for stress testing
+POST {{baseUrl}}/api/v1/jobs
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: text/plain
+
+Your test content here
+
+--WebAppBoundary
+Content-Disposition: form-data; name="processing_type"
+
+wordcount
+--WebAppBoundary
+Content-Disposition: form-data; name="delay_ms"
+
+5000
 --WebAppBoundary--
 ```
 
