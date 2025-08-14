@@ -22,6 +22,7 @@ type ProcessingJob struct {
 	FilePath       string
 	ProcessingType database.ProcessingType
 	Parameters     map[string]any
+	DelayMS        int
 }
 
 // ProcessingError represents an error that occurred during job processing.

@@ -192,6 +192,7 @@ func (w *Worker) processJob(ctx context.Context, message *queue.SubmitJobMessage
 		FilePath:       message.FilePath,
 		ProcessingType: message.ProcessingType,
 		Parameters:     message.Parameters,
+		DelayMS:        message.DelayMS,
 	}
 
 	outputPath, err := w.textProcessor.Process(jobCtx, processingJob)

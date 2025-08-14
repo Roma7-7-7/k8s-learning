@@ -31,6 +31,7 @@ type SubmitJobMessage struct {
 	ProcessingType database.ProcessingType `json:"processing_type"`
 	Parameters     map[string]any          `json:"parameters"`
 	Priority       int                     `json:"priority"`
+	DelayMS        int                     `json:"delay_ms"`
 }
 
 type RedisQueue struct {

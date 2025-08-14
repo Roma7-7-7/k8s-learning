@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rsav/k8s-learning/internal/storage/database"
 )
@@ -41,7 +42,23 @@ func (tp *TextProcessor) Process(ctx context.Context, job *ProcessingJob) (strin
 	tp.log.InfoContext(ctx, "processing text job",
 		"job_id", job.JobID,
 		"processing_type", job.ProcessingType,
-		"file_path", job.FilePath)
+		"file_path", job.FilePath,
+		"delay_ms", job.DelayMS)
+
+	// Apply delay for stress testing if specified
+	if job.DelayMS > 0 {
+		delayDuration := time.Duration(job.DelayMS) * time.Millisecond
+		tp.log.InfoContext(ctx, "applying processing delay for stress testing",
+			"job_id", job.JobID,
+			"delay_ms", job.DelayMS)
+
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("context cancelled during delay: %w", ctx.Err())
+		case <-time.After(delayDuration):
+			// Delay completed, continue processing
+		}
+	}
 
 	switch job.ProcessingType {
 	case database.ProcessingTypeWordCount:

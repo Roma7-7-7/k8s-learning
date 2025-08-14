@@ -41,3 +41,4 @@ build/
 # Local development directories
 uploads/
 results/
+test-files/
