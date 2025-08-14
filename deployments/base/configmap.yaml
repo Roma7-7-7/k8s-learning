@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: k8s-learning
+  labels:
+    app: k8s-learning
+data:
+  # Database configuration
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "textprocessing"
+  DB_SSL_MODE: "disable"
+  DB_MAX_CONNS: "20"
+  DB_MAX_IDLE: "10"
+  DB_MIGRATIONS_URL: "file:///app/migrations"
+  
+  # Redis configuration
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  
+  # API Server configuration
+  HOST: "0.0.0.0"
+  PORT: "8080"
+  READ_TIMEOUT: "10s"
+  WRITE_TIMEOUT: "10s"
+  IDLE_TIMEOUT: "120s"
+  SHUTDOWN_TIMEOUT: "30s"
+  
+  # Storage configuration
+  UPLOAD_DIR: "/app/uploads"
+  RESULT_DIR: "/app/results"
+  MAX_FILE_SIZE: "10485760"
+  
+  # Worker configuration
+  CONCURRENT_JOBS: "5"
+  HEARTBEAT_INTERVAL: "30s"
+  POLL_INTERVAL: "5s"
+  
+  # Logging configuration
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"

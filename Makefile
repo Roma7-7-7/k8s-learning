@@ -75,10 +75,10 @@ deps:
 docker-build: docker-build-api docker-build-worker docker-build-controller docker-build-ui
 
 docker-build-api:
-	docker build -f docker/api.Dockerfile -t $(DOCKER_REGISTRY)/$(API_BINARY):$(IMAGE_TAG) .
+	docker build -f docker/Dockerfile.api -t $(DOCKER_REGISTRY)/$(API_BINARY):$(IMAGE_TAG) .
 
 docker-build-worker:
-	docker build -f docker/worker.Dockerfile -t $(DOCKER_REGISTRY)/$(WORKER_BINARY):$(IMAGE_TAG) .
+	docker build -f docker/Dockerfile.worker -t $(DOCKER_REGISTRY)/$(WORKER_BINARY):$(IMAGE_TAG) .
 
 docker-build-controller:
 	docker build -f docker/controller.Dockerfile -t $(DOCKER_REGISTRY)/$(CONTROLLER_BINARY):$(IMAGE_TAG) .
@@ -101,12 +101,55 @@ docker-push-controller:
 docker-push-ui:
 	docker push $(DOCKER_REGISTRY)/text-ui:$(IMAGE_TAG)
 
-# Kubernetes deployment
+# Build Docker images for Kubernetes
+k8s-build:
+	./scripts/build-images.sh
+
+# Kubernetes deployment  
 k8s-deploy:
-	kubectl apply -f deployments/base/
+	./scripts/deploy-local.sh
 
 k8s-delete:
-	kubectl delete -f deployments/base/
+	./scripts/cleanup.sh
+
+# Load images into minikube
+k8s-load-images:
+	minikube image load k8s-learning/api:dev
+	minikube image load k8s-learning/worker:dev
+
+# Complete local K8s workflow (build, load, deploy)
+k8s-local: k8s-build k8s-load-images k8s-deploy
+
+# Port forward API service to localhost:8080
+k8s-port-forward:
+	@echo "Port forwarding API service to http://localhost:8080"
+	@echo "Press Ctrl+C to stop port forwarding"
+	kubectl port-forward svc/api-service 8080:8080 -n k8s-learning
+
+# Show status of all resources
+k8s-status:
+	@echo "=== Pods ==="
+	kubectl get pods -n k8s-learning -o wide
+	@echo ""
+	@echo "=== Services ==="
+	kubectl get svc -n k8s-learning
+	@echo ""
+	@echo "=== PVCs ==="
+	kubectl get pvc -n k8s-learning
+
+# Show logs for all services
+k8s-logs:
+	@echo "=== API Logs ==="
+	kubectl logs -l app=api -n k8s-learning --tail=50
+	@echo ""
+	@echo "=== Worker Logs ==="
+	kubectl logs -l app=worker -n k8s-learning --tail=50
+	@echo ""
+	@echo "=== Postgres Logs ==="
+	kubectl logs -l app=postgres -n k8s-learning --tail=20
+	@echo ""
+	@echo "=== Redis Logs ==="
+	kubectl logs -l app=redis -n k8s-learning --tail=20
 
 # Development helpers
 run-api:
@@ -166,8 +209,14 @@ help:
 	@echo "  deps             - Download and tidy dependencies"
 	@echo "  docker-build     - Build all Docker images"
 	@echo "  docker-push      - Push all Docker images"
-	@echo "  k8s-deploy       - Deploy to Kubernetes"
+	@echo "  k8s-build        - Build Docker images for Kubernetes"
+	@echo "  k8s-deploy       - Deploy to Kubernetes using kustomize"
 	@echo "  k8s-delete       - Delete from Kubernetes"
+	@echo "  k8s-load-images  - Load images into minikube"
+	@echo "  k8s-local        - Complete local K8s workflow (build, load, deploy)"
+	@echo "  k8s-port-forward - Port forward API service to localhost:8080"
+	@echo "  k8s-status       - Show status of all K8s resources"
+	@echo "  k8s-logs         - Show logs for all services"
 	@echo "  run-api          - Build and run API service"
 	@echo "  run-worker       - Build and run worker service"
 	@echo "  run-controller   - Build and run controller service"

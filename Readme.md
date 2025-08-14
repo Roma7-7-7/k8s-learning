@@ -235,30 +235,67 @@ text-processing-queue/
 ## Implementation Status
 
 ### ✅ Completed Components
-- **API Service (`text-api`)**: Full REST API implementation with:
-  - Job submission and status endpoints (`POST /api/v1/jobs`, `GET /api/v1/jobs/{id}`)
-  - File upload handling with validation
-  - PostgreSQL integration with golang-migrate
-  - Redis queue integration
-  - Health checks (`/health`, `/ready`, `/stats`)
-  - Structured logging with slog
-  - Environment-based configuration with envconfig
-  - Automatic database migrations on startup
-  - Comprehensive middleware (CORS, security, logging)
-  - Graceful shutdown handling
+
+#### **API Service (`text-api`)**
+Full REST API implementation with:
+- Job submission and status endpoints (`POST /api/v1/jobs`, `GET /api/v1/jobs/{id}`)
+- File upload handling with validation
+- PostgreSQL integration with golang-migrate
+- Redis queue integration
+- Health checks (`/health`, `/ready`, `/stats`)
+- Structured logging with slog
+- Environment-based configuration with envconfig
+- Automatic database migrations on startup
+- Comprehensive middleware (CORS, security, logging)
+- Graceful shutdown handling
+- Configurable migration paths via `DB_MIGRATIONS_URL`
+
+#### **Worker Service (`text-worker`)**
+Background job processor with:
+- Redis queue consumer implementation
+- Text processing capabilities (word count, line count, case conversion, find/replace, extract)
+- Database status updates
+- File processing and result storage
+- Worker heartbeat and health tracking
+- Graceful shutdown handling
+- Concurrent job processing
+
+#### **Kubernetes Infrastructure**
+Complete local deployment setup with:
+- **PostgreSQL**: Database deployment with automatic `textprocessing` database creation
+- **Redis**: Message queue and caching deployment
+- **API Service**: Kubernetes deployment with 2 replicas, health checks, and init containers
+- **Worker Service**: Kubernetes deployment with 2 replicas and shared storage
+- **Storage**: Persistent volumes for database, Redis, uploads, and results
+- **Configuration**: ConfigMaps and Secrets for environment-specific settings
+- **Networking**: Internal ClusterIP services with port-forwarding for external access
+- **Kustomize**: Environment-specific overlays (development/production)
+
+#### **Docker Images**
+Multi-stage Docker builds with:
+- **API Image**: Optimized Go binary with migration files and non-root user
+- **Worker Image**: Lightweight Alpine-based image with text processing capabilities
+- **Security**: Non-root user, minimal base images, proper file permissions
+- **Build Scripts**: Automated image building and tagging
+
+#### **Development Tooling**
+- **Makefile**: Comprehensive build, test, and deployment targets
+- **Scripts**: Automated build (`build-images.sh`), deploy (`deploy-local.sh`), cleanup (`cleanup.sh`)
+- **HTTP Client**: Complete API testing suite for JetBrains IDEs (`api-tests.http`)
+- **Configuration Management**: Environment variables with sensible defaults
+- **Database Migrations**: golang-migrate integration with automatic execution
 
 ### 🚧 In Progress
-- Worker Service (`text-worker`)
-- Controller (`text-controller`)
-- Web UI (`text-ui`)
-- Kubernetes manifests
-- Docker images
+- **Controller (`text-controller`)**: Kubernetes controller for custom resources and auto-scaling
+- **Web UI (`text-ui`)**: Static web interface for job submission and monitoring
 
 ### 📋 Pending
-- Database and Redis StatefulSets
-- Helm charts
-- CI/CD pipeline
-- Monitoring and observability
+- **Production Configuration**: Helm charts for production deployments
+- **CI/CD Pipeline**: Automated testing and deployment
+- **Monitoring**: Prometheus metrics and Grafana dashboards
+- **Observability**: Distributed tracing and structured logging aggregation
+- **Security**: RBAC, network policies, and security scanning
+- **High Availability**: Multi-zone deployments and backup strategies
 
 ## API Endpoints
 
@@ -302,6 +339,7 @@ The application uses environment variables for configuration with production-ori
 - `DB_SSL_MODE=require` - PostgreSQL SSL mode (require, verify-ca, verify-full, disable)
 - `DB_MAX_CONNS=20` - Maximum database connections
 - `DB_MAX_IDLE=10` - Maximum idle database connections
+- `DB_MIGRATIONS_URL=file://migrations` - Migration files URL path
 
 ### Redis Configuration (**Required Values**)
 - `REDIS_HOST` - **REQUIRED** Redis host
@@ -517,8 +555,14 @@ The HTTP client provides a complete testing environment without requiring extern
 - `make docker-push` - Push all Docker images
 
 ### Kubernetes
-- `make k8s-deploy` - Deploy to Kubernetes
+- `make k8s-build` - Build Docker images for Kubernetes
+- `make k8s-deploy` - Deploy to Kubernetes using kustomize
 - `make k8s-delete` - Delete from Kubernetes
+- `make k8s-load-images` - Load images into minikube
+- `make k8s-local` - Complete local K8s workflow (build, load, deploy)
+- `make k8s-port-forward` - Port forward API service to localhost:8080
+- `make k8s-status` - Show status of all K8s resources
+- `make k8s-logs` - Show logs for all services
 - `make generate-crds` - Generate CRD manifests
 
 ### Testing
@@ -526,3 +570,172 @@ The HTTP client provides a complete testing environment without requiring extern
 
 ### Cleanup
 - `make clean` - Clean build artifacts
+
+## Kubernetes Deployment
+
+The project includes comprehensive Kubernetes manifests for local development and testing using minikube or similar local clusters.
+
+### Quick Local Deployment
+
+**Prerequisites:**
+- Docker or compatible container runtime
+- minikube or local Kubernetes cluster
+- kubectl configured for your cluster
+- kustomize installed
+
+**Deploy Everything:**
+```bash
+# Complete workflow - builds, loads, and deploys
+make k8s-local
+
+# Access the API
+make k8s-port-forward
+# API available at http://localhost:8080
+
+# Check status
+make k8s-status
+
+# View logs
+make k8s-logs
+
+# Clean up
+make k8s-delete
+```
+
+### Manual Steps
+
+```bash
+# 1. Build Docker images
+make k8s-build
+
+# 2. Load images into minikube (if using minikube)
+make k8s-load-images
+
+# 3. Deploy to Kubernetes
+make k8s-deploy
+
+# 4. Check deployment status
+kubectl get pods -n k8s-learning
+
+# 5. Access API service
+kubectl port-forward svc/api-service 8080:8080 -n k8s-learning
+```
+
+### Architecture Components
+
+**Deployed Services:**
+- **PostgreSQL**: Database with automatic `textprocessing` database creation
+- **Redis**: Message queue and caching
+- **API Service**: REST API with 2 replicas
+- **Worker Service**: Background job processors with 2 replicas
+- **Init Containers**: Wait for database readiness before API startup
+
+**Storage:**
+- **postgres-pvc**: 1GB persistent volume for PostgreSQL data
+- **redis-pvc**: 512MB persistent volume for Redis data
+- **uploads-pvc**: 2GB shared volume for uploaded files
+- **results-pvc**: 2GB shared volume for processed results
+
+**Configuration:**
+- **app-config ConfigMap**: Environment variables for all services
+- **app-secrets Secret**: Base64-encoded database and Redis credentials
+- **postgres-init-script ConfigMap**: Database initialization SQL
+
+### Environment-Specific Configuration
+
+The deployment uses **kustomize overlays** for environment-specific settings:
+
+**Development Overlay** (`deployments/overlays/development/`):
+- Debug logging enabled (`LOG_LEVEL=debug`)
+- Development image tags (`:dev`)
+- Local-friendly configurations
+
+**Base Configuration** (`deployments/base/`):
+- Production-ready defaults
+- Resource limits and requests
+- Health checks and probes
+- Persistent volume claims
+
+### Database Setup
+
+The PostgreSQL deployment automatically:
+1. **Creates the database**: Uses `POSTGRES_DB=textprocessing` environment variable
+2. **Runs init scripts**: Executes SQL from ConfigMap on first startup
+3. **Provides persistence**: Data survives pod restarts via PVC
+4. **Runs migrations**: API service runs golang-migrate on startup
+
+**Database Initialization:**
+- Database: `textprocessing` (auto-created)
+- User: `postgres` / Password: `postgres` (for local dev)
+- Init script ensures database exists before API starts
+- Migrations run automatically when API starts
+
+### Migration Configuration
+
+Migrations use environment-specific paths:
+- **Local development**: `DB_MIGRATIONS_URL=file://migrations` (relative path)
+- **Kubernetes**: `DB_MIGRATIONS_URL=file:///app/migrations` (absolute path in container)
+- **Custom environments**: Override via ConfigMap or environment variables
+
+### Networking
+
+**Internal Services** (ClusterIP):
+- `postgres-service:5432` - PostgreSQL database
+- `redis-service:6379` - Redis queue
+- `api-service:8080` - API service (accessed via port-forward)
+
+**External Access:**
+- Use `kubectl port-forward svc/api-service 8080:8080 -n k8s-learning` 
+- Or configure Ingress for production deployments
+
+### Resource Management
+
+**Resource Limits:**
+- **PostgreSQL**: 512MB memory, 500m CPU
+- **Redis**: 256MB memory, 200m CPU  
+- **API**: 512MB memory, 500m CPU
+- **Worker**: 512MB memory, 500m CPU
+
+**Scaling:**
+- API: 2 replicas (can be scaled horizontally)
+- Worker: 2 replicas (can be scaled based on queue depth)
+- Database/Redis: 1 replica (stateful services)
+
+### Monitoring and Debugging
+
+```bash
+# Check all resources
+make k8s-status
+
+# View logs from all services
+make k8s-logs
+
+# Debug specific service
+kubectl logs -l app=api -n k8s-learning --follow
+kubectl logs -l app=worker -n k8s-learning --follow
+kubectl logs -l app=postgres -n k8s-learning
+kubectl logs -l app=redis -n k8s-learning
+
+# Describe resources
+kubectl describe pods -n k8s-learning
+kubectl describe pvc -n k8s-learning
+
+# Access pod shell for debugging
+kubectl exec -it deployment/api -n k8s-learning -- sh
+```
+
+### Troubleshooting
+
+**Common Issues:**
+
+1. **Images not found**: Run `make k8s-load-images` for minikube
+2. **Database connection failed**: Check if PostgreSQL pod is ready
+3. **Migrations fail**: Verify `textprocessing` database was created
+4. **Pods pending**: Check PVC creation and storage class
+5. **Init container timeout**: Database may need more time to start
+
+**Clean deployment:**
+```bash
+make k8s-delete  # Removes namespace and all resources
+make k8s-local   # Fresh deployment
+```

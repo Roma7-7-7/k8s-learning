@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: k8s-learning
+  labels:
+    app: worker
+    component: processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+        component: processor
+    spec:
+      containers:
+      - name: worker
+        image: k8s-learning/worker:latest
+        imagePullPolicy: Never
+        env:
+        - name: WORKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secrets
+        volumeMounts:
+        - name: uploads-storage
+          mountPath: /app/uploads
+          readOnly: true
+        - name: results-storage
+          mountPath: /app/results
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: uploads-storage
+        persistentVolumeClaim:
+          claimName: uploads-pvc
+      - name: results-storage
+        persistentVolumeClaim:
+          claimName: results-pvc
