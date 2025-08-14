@@ -19,19 +19,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger := setupLogger(cfg.Logging.Level, cfg.Logging.Format)
-	slog.SetDefault(logger)
+	log := setupLogger(cfg.Logging.Level, cfg.Logging.Format)
+	slog.SetDefault(log)
 
-	logger.InfoContext(ctx, "Starting text processing API service")
+	log.InfoContext(ctx, "Starting text processing API service")
 
-	server, err := api.NewServer(cfg, logger)
+	server, err := api.NewServer(cfg, log)
 	if err != nil {
-		logger.ErrorContext(ctx, "Failed to create server", "error", err)
+		log.ErrorContext(ctx, "Failed to create server", "error", err)
 		os.Exit(1)
 	}
 
 	if err := server.Start(ctx); err != nil {
-		logger.ErrorContext(ctx, "Server failed", "error", err)
+		log.ErrorContext(ctx, "Server failed", "error", err)
 	}
 }
 

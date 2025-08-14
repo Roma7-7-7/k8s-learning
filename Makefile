@@ -27,7 +27,7 @@ IMAGE_TAG=latest
 all: fmt test build
 
 # Build all binaries
-build: build-api
+build: build-api build-worker
 
 # Build individual components
 build-api:
