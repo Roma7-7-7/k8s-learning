@@ -8,6 +8,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/rsav/k8s-learning/internal/api"
 	"github.com/rsav/k8s-learning/internal/config"
+	"github.com/rsav/k8s-learning/internal/storage/database"
 )
 
 func main() {
@@ -21,6 +22,12 @@ func main() {
 
 	log := setupLogger(cfg.Logging.Level, cfg.Logging.Format)
 	slog.SetDefault(log)
+
+	log.InfoContext(ctx, "run migrations")
+	if err := database.RunMigrations(cfg.Database.ConnectionString(), cfg.Database.MigrationsURL, log); err != nil {
+		log.ErrorContext(ctx, "Failed to run migrations", "error", err)
+		os.Exit(1)
+	}
 
 	log.InfoContext(ctx, "Starting text processing API service")
 

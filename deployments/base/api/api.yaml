@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: k8s-learning
+  labels:
+    app: api
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        component: backend
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15-alpine
+        command: ['sh', '-c']
+        args:
+          - |
+            echo "Waiting for PostgreSQL server to be ready..."
+            until pg_isready -h postgres-service -p 5432 -U postgres; do
+              echo "PostgreSQL server not ready, waiting..."
+              sleep 2
+            done
+            echo "PostgreSQL server is ready!"
+            
+            echo "Waiting for textprocessing database to be created..."
+            until psql -h postgres-service -U postgres -lqt | cut -d \| -f 1 | grep -qw textprocessing; do
+              echo "Database 'textprocessing' not found, waiting..."
+              sleep 2
+            done
+            echo "Database 'textprocessing' is ready!"
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: DB_PASSWORD
+      containers:
+      - name: api
+        image: k8s-learning/api:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+          name: http
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secrets
+        volumeMounts:
+        - name: uploads-storage
+          mountPath: /app/uploads
+        - name: results-storage
+          mountPath: /app/results
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: uploads-storage
+        persistentVolumeClaim:
+          claimName: uploads-pvc
+      - name: results-storage
+        persistentVolumeClaim:
+          claimName: results-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: k8s-learning
+  labels:
+    app: api
+    component: backend
+spec:
+  selector:
+    app: api
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uploads-pvc
+  namespace: k8s-learning
+  labels:
+    app: api
+    purpose: uploads
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: results-pvc
+  namespace: k8s-learning
+  labels:
+    app: api
+    purpose: results
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi

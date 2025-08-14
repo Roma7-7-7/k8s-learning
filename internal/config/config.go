@@ -41,14 +41,15 @@ type Server struct {
 }
 
 type Database struct {
-	Host     string `envconfig:"DB_HOST" required:"true"`
-	Port     int    `envconfig:"DB_PORT" default:"5432"`
-	User     string `envconfig:"DB_USER" required:"true"`
-	Password string `envconfig:"DB_PASSWORD" required:"true"`
-	Database string `envconfig:"DB_NAME" required:"true"`
-	SSLMode  string `envconfig:"DB_SSL_MODE" default:"require"`
-	MaxConns int    `envconfig:"DB_MAX_CONNS" default:"20"`
-	MaxIdle  int    `envconfig:"DB_MAX_IDLE" default:"10"`
+	Host          string `envconfig:"DB_HOST" required:"true"`
+	Port          int    `envconfig:"DB_PORT" default:"5432"`
+	User          string `envconfig:"DB_USER" required:"true"`
+	Password      string `envconfig:"DB_PASSWORD" required:"true"`
+	Database      string `envconfig:"DB_NAME" required:"true"`
+	SSLMode       string `envconfig:"DB_SSL_MODE" default:"require"`
+	MaxConns      int    `envconfig:"DB_MAX_CONNS" default:"20"`
+	MaxIdle       int    `envconfig:"DB_MAX_IDLE" default:"10"`
+	MigrationsURL string `envconfig:"DB_MIGRATIONS_URL" default:"file://migrations"`
 }
 
 func (dc Database) ConnectionString() string {

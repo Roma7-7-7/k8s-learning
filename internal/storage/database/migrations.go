@@ -12,7 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func RunMigrations(connStr string, log *slog.Logger) error {
+func RunMigrations(connStr, migrationsURL string, log *slog.Logger) error {
 	ctx := context.Background()
 
 	log.DebugContext(ctx, "creating separate database connection for migrations")
@@ -28,8 +28,8 @@ func RunMigrations(connStr string, log *slog.Logger) error {
 		return fmt.Errorf("create pgx driver: %w", err)
 	}
 
-	log.DebugContext(ctx, "opening migration files from migrations directory")
-	sourceDriver, err := (&file.File{}).Open("file://migrations")
+	log.DebugContext(ctx, "opening migration files", "url", migrationsURL)
+	sourceDriver, err := (&file.File{}).Open(migrationsURL)
 	if err != nil {
 		return fmt.Errorf("open migrations source: %w", err)
 	}
