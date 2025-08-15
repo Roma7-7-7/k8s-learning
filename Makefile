@@ -86,7 +86,7 @@ docker-build-worker:
 	docker build -f docker/Dockerfile.worker -t $(DOCKER_REGISTRY)/$(WORKER_BINARY):$(IMAGE_TAG) .
 
 docker-build-controller:
-	docker build -f docker/controller.Dockerfile -t $(DOCKER_REGISTRY)/$(CONTROLLER_BINARY):$(IMAGE_TAG) .
+	docker build -f docker/Dockerfile.controller -t $(DOCKER_REGISTRY)/$(CONTROLLER_BINARY):$(IMAGE_TAG) .
 
 docker-build-ui:
 	docker build -f docker/ui.Dockerfile -t $(DOCKER_REGISTRY)/text-ui:$(IMAGE_TAG) .
@@ -121,6 +121,7 @@ k8s-delete:
 k8s-load-images:
 	minikube image load k8s-learning/api:dev
 	minikube image load k8s-learning/worker:dev
+	minikube image load k8s-learning/controller:dev
 	minikube image load k8s-learning/web:dev
 
 # Complete local K8s workflow (build, load, deploy)

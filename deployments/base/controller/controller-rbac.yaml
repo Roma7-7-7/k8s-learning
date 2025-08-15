@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: controller
+  labels:
+    app: controller
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: controller-role
+  labels:
+    app: controller
+rules:
+# TextProcessingJob permissions
+- apiGroups:
+  - textprocessing.k8s-learning.dev
+  resources:
+  - textprocessingjobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - textprocessing.k8s-learning.dev
+  resources:
+  - textprocessingjobs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - textprocessing.k8s-learning.dev
+  resources:
+  - textprocessingjobs/status
+  verbs:
+  - get
+  - patch
+  - update
+# Deployment permissions for managing worker pods
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+# Service permissions
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+# Events permissions for creating events
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+# Leader election permissions
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - get
+  - list
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: controller-rolebinding
+  labels:
+    app: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: controller-role
+subjects:
+- kind: ServiceAccount
+  name: controller
+  namespace: k8s-learning
