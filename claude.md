@@ -186,6 +186,45 @@ curl -X POST "http://localhost:8080/api/v1/jobs" \
 - Logged for debugging and monitoring purposes
 - API response includes delay value for verification
 
+### Stress Testing Tool
+
+The project includes a dedicated stress testing tool (`cmd/stress-test`) for automated load testing:
+
+**Build Commands:**
+```bash
+make build-stress-test     # Build stress test tool
+make run-stress-test       # Build and run with default parameters
+```
+
+**Features:**
+- Concurrent request generation with configurable worker count
+- Randomized processing delays to simulate varying workloads
+- Comprehensive metrics collection (latency, throughput, error rates)
+- File upload simulation with real multipart form data
+- Test duration control and graceful termination
+
+**Usage:**
+```bash
+# Default test (30s duration, 2 workers, test-files/sample.txt)
+make run-stress-test
+
+# Custom parameters
+./build/stress-test --file test-files/sample.txt \
+  --duration 60 \
+  --concurrency 5 \
+  --min-process-delay 1000 \
+  --max-process-delay 5000
+```
+
+**Parameters:**
+- `--file`: Path to test file (required)
+- `--min-process-delay`: Min delay in ms (default: 0)
+- `--max-process-delay`: Max delay in ms (default: 30000)
+- `--concurrency`: Number of concurrent requests (default: 1)
+- `--query-delay`: Delay between requests in ms (default: 10)
+- `--duration`: Test duration in seconds (default: 60)
+- `--api-endpoint`: API endpoint URL (default: "http://localhost:8080/api/v1/jobs")
+
 ## Task Completion Protocol
 
 After completing each significant task or implementation milestone:
@@ -216,6 +255,29 @@ make lint         # Run golangci-lint for code quality checks
 make test         # Run all tests
 make build        # Build all binaries
 make all          # Format, lint, test, and build
+```
+
+### Build Commands
+```bash
+make build-api           # Build API service
+make build-worker        # Build worker service  
+make build-controller    # Build controller service
+make build-stress-test   # Build stress testing tool
+```
+
+### Run Commands  
+```bash
+make run-api           # Build and run API service
+make run-worker        # Build and run worker service
+make run-controller    # Build and run controller service
+make run-stress-test   # Build and run stress test with default parameters
+```
+
+### Testing Commands
+```bash
+make test              # Run unit tests
+make test-coverage     # Run tests with coverage report
+make run-stress-test   # Run load/stress testing
 ```
 
 ### Code Quality

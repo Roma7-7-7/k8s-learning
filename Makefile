@@ -13,6 +13,7 @@ GOFMT=gofmt
 API_BINARY=text-api
 WORKER_BINARY=text-worker
 CONTROLLER_BINARY=text-controller
+STRESS_TEST_BINARY=stress-test
 
 # Build directory
 BUILD_DIR=build
@@ -21,13 +22,13 @@ BUILD_DIR=build
 DOCKER_REGISTRY=localhost:5000
 IMAGE_TAG=latest
 
-.PHONY: all build clean test deps fmt lint help web
+.PHONY: all build clean test deps fmt lint help web build-stress-test run-stress-test run-stress-test-k8s
 
 # Default target
 all: fmt test build
 
 # Build all binaries
-build: build-api build-worker
+build: build-api build-worker build-stress-test
 
 # Build individual components
 build-api:
@@ -41,6 +42,10 @@ build-worker:
 build-controller:
 	mkdir -p $(BUILD_DIR)
 	$(GOBUILD) -o $(BUILD_DIR)/$(CONTROLLER_BINARY) -v ./cmd/controller
+
+build-stress-test:
+	mkdir -p $(BUILD_DIR)
+	$(GOBUILD) -o $(BUILD_DIR)/$(STRESS_TEST_BINARY) -v ./cmd/stress-test
 
 # Run tests
 test:
@@ -165,6 +170,14 @@ run-worker:
 run-controller:
 	$(GOBUILD) -o $(BUILD_DIR)/$(CONTROLLER_BINARY) ./cmd/controller && ./$(BUILD_DIR)/$(CONTROLLER_BINARY)
 
+run-stress-test:
+	$(GOBUILD) -o $(BUILD_DIR)/$(STRESS_TEST_BINARY) ./cmd/stress-test && \
+	./$(BUILD_DIR)/$(STRESS_TEST_BINARY) --file test-files/sample.txt --duration 30 --concurrency 2 --min-process-delay 500 --max-process-delay 2000
+
+run-stress-test-k8s:
+	$(GOBUILD) -o $(BUILD_DIR)/$(STRESS_TEST_BINARY) ./cmd/stress-test && \
+	./$(BUILD_DIR)/$(STRESS_TEST_BINARY) --file test-files/sample.txt --api-endpoint http://localhost/api/v1/jobs --duration 30 --concurrency 2 --min-process-delay 500 --max-process-delay 2000
+
 # Generate CRD manifests (requires controller-gen)
 generate-crds:
 	@which controller-gen > /dev/null || (echo "controller-gen not found, install with: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest" && exit 1)
@@ -205,6 +218,7 @@ help:
 	@echo "  build-api        - Build API service"
 	@echo "  build-worker     - Build worker service"
 	@echo "  build-controller - Build controller service"
+	@echo "  build-stress-test - Build stress test tool"
 	@echo "  test             - Run all tests"
 	@echo "  test-coverage    - Run tests with coverage report"
 	@echo "  fmt              - Format Go code"
@@ -224,6 +238,8 @@ help:
 	@echo "  run-api          - Build and run API service"
 	@echo "  run-worker       - Build and run worker service"
 	@echo "  run-controller   - Build and run controller service"
+	@echo "  run-stress-test  - Build and run stress test with default parameters"
+	@echo "  run-stress-test-k8s - Build and run stress test against local minikube (http://localhost/api/v1/jobs)"
 	@echo "  setup-dev        - Setup local development environment (.env file and directories)"
 	@echo "  web              - Start web UI development server on http://localhost:3000"
 	@echo "  generate-crds    - Generate CRD manifests"
