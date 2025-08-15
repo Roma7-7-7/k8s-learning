@@ -12,54 +12,12 @@ metadata:
   labels:
     app: controller
 rules:
-# TextProcessingJob permissions
-- apiGroups:
-  - textprocessing.k8s-learning.dev
-  resources:
-  - textprocessingjobs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - textprocessing.k8s-learning.dev
-  resources:
-  - textprocessingjobs/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - textprocessing.k8s-learning.dev
-  resources:
-  - textprocessingjobs/status
-  verbs:
-  - get
-  - patch
-  - update
-# Deployment permissions for managing worker pods
+# Deployment permissions for managing worker scaling
 - apiGroups:
   - apps
   resources:
   - deployments
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-# Service permissions
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - create
-  - delete
   - get
   - list
   - patch

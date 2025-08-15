@@ -179,10 +179,9 @@ run-stress-test-k8s:
 	$(GOBUILD) -o $(BUILD_DIR)/$(STRESS_TEST_BINARY) ./cmd/stress-test && \
 	./$(BUILD_DIR)/$(STRESS_TEST_BINARY) --file test-files/sample.txt --api-endpoint http://localhost/api/v1/jobs --duration 30 --concurrency 2 --min-process-delay 500 --max-process-delay 2000
 
-# Generate CRD manifests (requires controller-gen)
-generate-crds:
-	@which controller-gen > /dev/null || (echo "controller-gen not found, install with: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest" && exit 1)
-	controller-gen crd paths=./internal/models/... output:crd:artifacts:config=deployments/base/controller/
+# Test auto-scaling functionality
+test-autoscaling:
+	./scripts/test-autoscaling.sh
 
 # Local development setup
 setup-dev:
@@ -243,5 +242,5 @@ help:
 	@echo "  run-stress-test-k8s - Build and run stress test against local minikube (http://localhost/api/v1/jobs)"
 	@echo "  setup-dev        - Setup local development environment (.env file and directories)"
 	@echo "  web              - Start web UI development server on http://localhost:3000"
-	@echo "  generate-crds    - Generate CRD manifests"
+	@echo "  test-autoscaling - Test queue-based auto-scaling demonstration"
 	@echo "  help             - Show this help message"

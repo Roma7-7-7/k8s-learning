@@ -5,13 +5,12 @@ metadata:
   name: controller
   
 resources:
-- textprocessing.k8s-learning.dev_textprocessingjobs.yaml
 - controller-rbac.yaml
 - controller-deployment.yaml
 - controller-service.yaml
 
 commonLabels:
-  app.kubernetes.io/name: text-processing-controller
+  app.kubernetes.io/name: worker-scaler-controller
   app.kubernetes.io/component: controller
   app.kubernetes.io/part-of: text-processing-system
 

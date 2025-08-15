@@ -17,8 +17,7 @@ import (
 
 	"github.com/rsav/k8s-learning/internal/config"
 	"github.com/rsav/k8s-learning/internal/controller/metrics"
-	"github.com/rsav/k8s-learning/internal/controller/textprocessingjob"
-	"github.com/rsav/k8s-learning/internal/models/v1alpha1"
+	"github.com/rsav/k8s-learning/internal/controller/workerscaler"
 	"github.com/rsav/k8s-learning/internal/storage/queue"
 )
 
@@ -29,7 +28,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 }
 
 func main() {
@@ -98,14 +96,14 @@ func main() {
 	}
 
 	// Setup controllers
-	if err = (&textprocessingjob.TextProcessingJobReconciler{
+	if err = (&workerscaler.WorkerScalerReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Log:    log,
 		Queue:  redisQueue,
 		Config: *cfg,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "TextProcessingJob")
+		setupLog.Error(err, "unable to create controller", "controller", "WorkerScaler")
 		os.Exit(1)
 	}
 
