@@ -25,28 +25,18 @@ spec:
         - "--leader-elect"
         - "--metrics-bind-address=:8080"
         - "--health-probe-bind-address=:8081"
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secrets
         env:
-        - name: REDIS_HOST
-          value: "redis-service"
-        - name: REDIS_PORT
-          value: "6379"
-        - name: REDIS_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: redis-password
-        - name: LOG_LEVEL
-          value: "info"
-        - name: LOG_FORMAT
-          value: "json"
         - name: ENABLE_AUTO_SCALING
-          value: "true"
-        - name: RECONCILE_INTERVAL_SECONDS
-          value: "30"
+          value: "false"
+        - name: RECONCILE_INTERVAL
+          value: "30s"
         - name: METRICS_COLLECTION_INTERVAL
           value: "15s"
-        - name: WORKER_IMAGE
-          value: "k8s-learning/worker:latest"
         ports:
         - containerPort: 8080
           name: metrics

@@ -159,7 +159,7 @@ REDIS_PASSWORD=secret
 
 # Auto-scaling behavior  
 ENABLE_AUTO_SCALING=true
-RECONCILE_INTERVAL_SECONDS=30
+RECONCILE_INTERVAL=30s
 METRICS_COLLECTION_INTERVAL=15s
 
 # Logging
@@ -198,7 +198,7 @@ LOG_FORMAT=json
 3. Verify min/max replica constraints
 
 **Performance issues:**
-1. Adjust `RECONCILE_INTERVAL_SECONDS` for faster/slower response
+1. Adjust `RECONCILE_INTERVAL` for faster/slower response
 2. Tune scaling thresholds based on your workload
 3. Monitor resource utilization of scaled workers
 

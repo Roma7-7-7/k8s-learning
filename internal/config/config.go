@@ -10,7 +10,6 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type API struct {
@@ -35,21 +34,9 @@ type Worker struct {
 type Controller struct {
 	Redis                     Redis
 	Logging                   Logging
-	MetricsAddr               string                `envconfig:"METRICS_ADDR" default:":8080"`
-	EnableLeaderElection      bool                  `envconfig:"ENABLE_LEADER_ELECTION" default:"false"`
-	ReconcileIntervalSeconds  int                   `envconfig:"RECONCILE_INTERVAL_SECONDS" default:"30"`
-	MetricsCollectionInterval time.Duration         `envconfig:"METRICS_COLLECTION_INTERVAL" default:"15s"`
-	EnableAutoScaling         bool                  `envconfig:"ENABLE_AUTO_SCALING" default:"true"`
-	WorkerImage               string                `envconfig:"WORKER_IMAGE" default:"k8s-learning/worker:latest"`
-	WorkerResourceRequests    ResourceRequirements  `envconfig:"WORKER_RESOURCE_REQUESTS"`
-	WorkerResourceLimits      ResourceRequirements  `envconfig:"WORKER_RESOURCE_LIMITS"`
+	ReconcileInterval         time.Duration `envconfig:"RECONCILE_INTERVAL" default:"30s"`
+	MetricsCollectionInterval time.Duration `envconfig:"METRICS_COLLECTION_INTERVAL" default:"15s"`
 }
-
-type ResourceRequirements struct {
-	CPU    resource.Quantity
-	Memory resource.Quantity
-}
-
 type Server struct {
 	Port            int           `envconfig:"PORT" default:"8080"`
 	Host            string        `envconfig:"HOST" default:"0.0.0.0"`
@@ -153,20 +140,6 @@ func LoadController() (*Controller, error) {
 
 	if err := envconfig.Process("", &config); err != nil {
 		return nil, fmt.Errorf("process environment variables: %w", err)
-	}
-
-	// Set default resource requirements if not provided
-	if config.WorkerResourceRequests.CPU.IsZero() {
-		config.WorkerResourceRequests.CPU = resource.MustParse("100m")
-	}
-	if config.WorkerResourceRequests.Memory.IsZero() {
-		config.WorkerResourceRequests.Memory = resource.MustParse("128Mi")
-	}
-	if config.WorkerResourceLimits.CPU.IsZero() {
-		config.WorkerResourceLimits.CPU = resource.MustParse("500m")
-	}
-	if config.WorkerResourceLimits.Memory.IsZero() {
-		config.WorkerResourceLimits.Memory = resource.MustParse("512Mi")
 	}
 
 	if err := config.Validate(); err != nil {
@@ -273,16 +246,12 @@ func (c *Controller) Validate() error {
 	}
 
 	// Controller validation
-	if c.ReconcileIntervalSeconds <= 0 {
+	if c.ReconcileInterval <= 0 {
 		return errors.New("reconcile interval must be positive")
 	}
 
 	if c.MetricsCollectionInterval <= 0 {
 		return errors.New("metrics collection interval must be positive")
-	}
-
-	if c.WorkerImage == "" {
-		return errors.New("worker image must be specified")
 	}
 
 	// Logging validation

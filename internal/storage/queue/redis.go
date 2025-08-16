@@ -166,7 +166,7 @@ func (rq *RedisQueue) PublishToFailedQueue(ctx context.Context, message SubmitJo
 	return nil
 }
 
-func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string) error {
+func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string, ttl time.Duration) error {
 	key := fmt.Sprintf("%s:%s", QueueHeartbeat, workerID)
 	heartbeat := map[string]interface{}{
 		"worker_id": workerID,
@@ -179,7 +179,7 @@ func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string) e
 		return fmt.Errorf("marshal heartbeat: %w", err)
 	}
 
-	if err := rq.client.Set(ctx, key, data, 5*time.Minute).Err(); err != nil { //nolint: mnd // Use a reasonable expiration time for heartbeats
+	if err := rq.client.Set(ctx, key, data, ttl+5*time.Second).Err(); err != nil { //nolint: mnd // Use a reasonable expiration time for heartbeats
 		return fmt.Errorf("set worker heartbeat: %w", err)
 	}
 
