@@ -257,9 +257,6 @@ A dedicated stress testing tool (`cmd/stress-test`) provides automated load test
 # Build and run with default parameters (30s duration, 2 concurrent workers)
 make run-stress-test
 
-# Run against local minikube deployment (requires minikube tunnel)
-make run-stress-test-k8s
-
 # Build the stress test tool only
 make build-stress-test
 

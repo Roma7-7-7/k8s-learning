@@ -12,6 +12,10 @@ docker build -f docker/Dockerfile.api -t k8s-learning/api:latest -t k8s-learning
 echo "Building Worker image..."
 docker build -f docker/Dockerfile.worker -t k8s-learning/worker:latest -t k8s-learning/worker:dev .
 
+# Build Controller image
+echo "Building Controller image..."
+docker build -f docker/Dockerfile.controller -t k8s-learning/controller:latest -t k8s-learning/controller:dev .
+
 # Build Web image
 echo "Building Web image..."
 docker build -f docker/Dockerfile.web -t k8s-learning/web:latest -t k8s-learning/web:dev .
@@ -22,5 +26,7 @@ echo "  k8s-learning/api:latest"
 echo "  k8s-learning/api:dev"  
 echo "  k8s-learning/worker:latest"
 echo "  k8s-learning/worker:dev"
+echo "  k8s-learning/controller:latest"
+echo "  k8s-learning/controller:dev"
 echo "  k8s-learning/web:latest"
 echo "  k8s-learning/web:dev"

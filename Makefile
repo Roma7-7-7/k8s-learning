@@ -22,7 +22,7 @@ BUILD_DIR=build
 DOCKER_REGISTRY=localhost:5000
 IMAGE_TAG=latest
 
-.PHONY: all build clean test deps fmt lint help web build-stress-test run-stress-test run-stress-test-k8s
+.PHONY: all build clean test deps fmt lint help web build-stress-test run-stress-test
 
 # Default target
 all: fmt test build
@@ -86,7 +86,7 @@ docker-build-worker:
 	docker build -f docker/Dockerfile.worker -t $(DOCKER_REGISTRY)/$(WORKER_BINARY):$(IMAGE_TAG) .
 
 docker-build-controller:
-	docker build -f docker/controller.Dockerfile -t $(DOCKER_REGISTRY)/$(CONTROLLER_BINARY):$(IMAGE_TAG) .
+	docker build -f docker/Dockerfile.controller -t $(DOCKER_REGISTRY)/$(CONTROLLER_BINARY):$(IMAGE_TAG) .
 
 docker-build-ui:
 	docker build -f docker/ui.Dockerfile -t $(DOCKER_REGISTRY)/text-ui:$(IMAGE_TAG) .
@@ -121,6 +121,7 @@ k8s-delete:
 k8s-load-images:
 	minikube image load k8s-learning/api:dev
 	minikube image load k8s-learning/worker:dev
+	minikube image load k8s-learning/controller:dev
 	minikube image load k8s-learning/web:dev
 
 # Complete local K8s workflow (build, load, deploy)
@@ -145,20 +146,23 @@ k8s-status:
 
 # Show logs for all services
 k8s-logs:
+	@echo "=== Postgres Logs ==="
+	kubectl logs -l app=postgres -n k8s-learning --tail=20
+	@echo ""
+	@echo "=== Redis Logs ==="
+	kubectl logs -l app=redis -n k8s-learning --tail=20
+	@echo ""
+	@echo "=== Web Logs ==="
+	kubectl logs -l app=web -n k8s-learning --tail=20
+	@echo ""
 	@echo "=== API Logs ==="
 	kubectl logs -l app=api -n k8s-learning --tail=50
 	@echo ""
 	@echo "=== Worker Logs ==="
 	kubectl logs -l app=worker -n k8s-learning --tail=50
 	@echo ""
-	@echo "=== Web Logs ==="
-	kubectl logs -l app=web -n k8s-learning --tail=20
-	@echo ""
-	@echo "=== Postgres Logs ==="
-	kubectl logs -l app=postgres -n k8s-learning --tail=20
-	@echo ""
-	@echo "=== Redis Logs ==="
-	kubectl logs -l app=redis -n k8s-learning --tail=20
+	@echo "=== Controller Logs ==="
+	kubectl logs -l app=controller -n k8s-learning --tail=20
 
 # Development helpers
 run-api:
@@ -174,14 +178,13 @@ run-stress-test:
 	$(GOBUILD) -o $(BUILD_DIR)/$(STRESS_TEST_BINARY) ./cmd/stress-test && \
 	./$(BUILD_DIR)/$(STRESS_TEST_BINARY) --file test-files/sample.txt --duration 30 --concurrency 2 --min-process-delay 500 --max-process-delay 2000
 
-run-stress-test-k8s:
-	$(GOBUILD) -o $(BUILD_DIR)/$(STRESS_TEST_BINARY) ./cmd/stress-test && \
-	./$(BUILD_DIR)/$(STRESS_TEST_BINARY) --file test-files/sample.txt --api-endpoint http://localhost/api/v1/jobs --duration 30 --concurrency 2 --min-process-delay 500 --max-process-delay 2000
+# Test auto-scaling functionality
+test-autoscaling:
+	./scripts/test-autoscaling.sh
 
-# Generate CRD manifests (requires controller-gen)
-generate-crds:
-	@which controller-gen > /dev/null || (echo "controller-gen not found, install with: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest" && exit 1)
-	controller-gen crd paths=./internal/models/... output:crd:artifacts:config=deployments/base/controller/
+# Quick controller redeploy for development
+redeploy-controller:
+	./scripts/redeploy-controller.sh
 
 # Local development setup
 setup-dev:
@@ -239,8 +242,7 @@ help:
 	@echo "  run-worker       - Build and run worker service"
 	@echo "  run-controller   - Build and run controller service"
 	@echo "  run-stress-test  - Build and run stress test with default parameters"
-	@echo "  run-stress-test-k8s - Build and run stress test against local minikube (http://localhost/api/v1/jobs)"
 	@echo "  setup-dev        - Setup local development environment (.env file and directories)"
 	@echo "  web              - Start web UI development server on http://localhost:3000"
-	@echo "  generate-crds    - Generate CRD manifests"
+	@echo "  test-autoscaling - Test queue-based auto-scaling demonstration"
 	@echo "  help             - Show this help message"
