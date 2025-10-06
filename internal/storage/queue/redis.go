@@ -179,7 +179,9 @@ func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string, t
 		return fmt.Errorf("marshal heartbeat: %w", err)
 	}
 
-	if err := rq.client.Set(ctx, key, data, ttl+5*time.Second).Err(); err != nil { //nolint: mnd // Use a reasonable expiration time for heartbeats
+	// Set heartbeat with a generous TTL buffer (2x heartbeat interval + buffer)
+	heartbeatTTL := ttl*2 + 10*time.Second
+	if err := rq.client.Set(ctx, key, data, heartbeatTTL).Err(); err != nil {
 		return fmt.Errorf("set worker heartbeat: %w", err)
 	}
 
