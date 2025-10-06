@@ -28,6 +28,8 @@
 - Avoid external dependencies for simple tasks
 - Use github.com/kelseyhightower/envconfig for environment variable configuration
 - Use github.com/golang-migrate/migrate for database migrations
+- Use sigs.k8s.io/controller-runtime for Kubernetes controllers
+- Use github.com/prometheus/client_golang for metrics exposition
 
 ### Testing
 - Write table-driven tests when testing multiple scenarios
@@ -100,6 +102,17 @@
 - Use multi-stage builds for Go applications
 - Don't run containers as root user
 - Group related resources in the same namespace
+
+### Controller Development
+- Use controller-runtime for building Kubernetes controllers
+- Implement periodic reconciliation with time.Ticker for queue-based controllers
+- Always use context.Context for cancellation support
+- Use Patch instead of Update for deployment modifications to avoid conflicts
+- Implement graceful shutdown handling for controllers
+- Expose metrics via Prometheus for monitoring
+- Use slog for structured logging with appropriate log levels
+- Set proper RBAC permissions (ServiceAccount, Role, RoleBinding)
+- Implement health and readiness probes for controller pods
 
 ### Services & Networking
 - Use Services for pod-to-pod communication
@@ -278,6 +291,17 @@ make run-stress-test   # Build and run stress test with default parameters
 make test              # Run unit tests
 make test-coverage     # Run tests with coverage report
 make run-stress-test   # Run load/stress testing
+make test-autoscaling  # Test queue-based auto-scaling demonstration
+```
+
+### Kubernetes Commands
+```bash
+make k8s-build         # Build Docker images for Kubernetes
+make k8s-deploy        # Deploy to Kubernetes using kustomize
+make k8s-local         # Complete local K8s workflow (build, load, deploy)
+make k8s-status        # Show status of all K8s resources
+make k8s-logs          # Show logs for all services
+make redeploy-controller  # Quick controller redeploy for development
 ```
 
 ### Code Quality
@@ -285,6 +309,41 @@ make run-stress-test   # Run load/stress testing
 - Use `make fmt` to format code according to Go standards
 - Run `make test-coverage` to ensure adequate test coverage
 - The project uses golangci-lint with comprehensive rules defined in `.golangci.yml`
+
+## Auto-Scaling Architecture
+
+The project implements queue-based auto-scaling using a custom Kubernetes controller:
+
+### Controller Design
+- Monitors Redis queue depth (main + priority queues) every 30 seconds
+- Scales worker deployment up/down based on queue thresholds
+- Uses Kubernetes client-go and controller-runtime libraries
+- Exposes Prometheus metrics for monitoring
+
+### Scaling Logic
+- **Scale up**: When queue depth > 20, add up to 2 workers (max 10 total)
+- **Scale down**: When queue depth < 5, remove 1 worker (min 1 total)
+- **Jobs per worker**: Estimated capacity of 10 jobs per worker
+- Uses Patch operations to avoid resource version conflicts
+
+### Configuration
+- `RECONCILE_INTERVAL`: Controller reconciliation interval (default: 30s)
+- `METRICS_COLLECTION_INTERVAL`: Metrics update interval (default: 15s)
+- Environment variables: `REDIS_HOST`, `REDIS_PORT`, `LOG_LEVEL`
+
+### Testing Auto-Scaling
+```bash
+# Run auto-scaling demonstration
+make test-autoscaling
+
+# Monitor worker scaling in real-time
+kubectl get deployment worker -n k8s-learning -w
+
+# Generate load to trigger scaling
+make run-stress-test
+```
+
+See `docs/AUTO_SCALING.md` for comprehensive architecture details.
 
 ## Code Review Checklist
 When reviewing or suggesting changes, ensure:
@@ -297,6 +356,8 @@ When reviewing or suggesting changes, ensure:
 - [ ] Appropriate logging level
 - [ ] Test coverage for new functionality
 - [ ] K8s resources have proper labels and resource limits
+- [ ] K8s controllers use Patch instead of Update for modifications
+- [ ] Controllers implement graceful shutdown
 - [ ] Web UI is accessible and responsive
 - [ ] No unnecessary JavaScript dependencies
 - [ ] Documentation updated (CLAUDE.md and README.md if needed)

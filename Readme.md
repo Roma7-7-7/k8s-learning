@@ -168,7 +168,7 @@ text-processing-queue/
 │   │   ├── queue/                  # Queue consumer
 │   │   └── worker.go               # Worker orchestration
 │   ├── controller/
-│   │   ├── textprocessingjob/      # CRD controller
+│   │   ├── scaler/                 # Auto-scaling logic
 │   │   └── metrics/                # Metrics collection
 │   ├── storage/
 │   │   ├── database/               # PostgreSQL operations
@@ -186,23 +186,25 @@ text-processing-queue/
 │       ├── development/            # Dev environment configs
 │       └── production/             # Prod environment configs
 ├── web/
-│   ├── static/                     # HTML, CSS, JS files
-│   └── nginx.conf                  # Nginx configuration
+│   ├── index.html                  # Main HTML file
+│   ├── app.js                      # JavaScript application
+│   ├── styles.css                  # CSS styles
+│   └── assets/                     # Static assets
 ├── scripts/
-│   ├── setup-cluster.sh            # Local development setup
 │   ├── build-images.sh             # Docker image building
-│   └── deploy.sh                   # Deployment automation
+│   ├── deploy-local.sh             # Deployment automation
+│   ├── cleanup.sh                  # Cleanup K8s resources
+│   └── redeploy-controller.sh      # Controller redeploy helper
 ├── test-files/
 │   └── sample.txt                  # Sample files for testing
 ├── docs/
-│   ├── api.md                      # API documentation
-│   ├── deployment.md               # Deployment guide
-│   └── development.md              # Development guide
+│   └── AUTO_SCALING.md             # Auto-scaling architecture documentation
 ├── docker/
-│   ├── api.Dockerfile              # API service image
-│   ├── worker.Dockerfile           # Worker service image
-│   ├── controller.Dockerfile       # Controller image
-│   └── ui.Dockerfile               # UI service image
+│   ├── Dockerfile.api              # API service image
+│   ├── Dockerfile.worker           # Worker service image
+│   ├── Dockerfile.controller       # Controller image
+│   ├── Dockerfile.web              # Web UI service image
+│   └── nginx.conf                  # Nginx configuration for web UI
 ├── go.mod
 ├── go.sum
 ├── Makefile                        # Build and deployment tasks
@@ -583,7 +585,7 @@ This file contains pre-configured requests for all API endpoints with:
 
 ### Test Files
 
-- `sample-files/test-file.txt`: Sample text file for manual testing
+- `test-files/sample.txt`: Sample text file for manual testing
 - Embedded content in HTTP requests for automated testing
 
 ### Example Usage
@@ -716,7 +718,6 @@ The HTTP client provides a complete testing environment without requiring extern
 - `make k8s-port-forward` - Port forward API service to localhost:8080
 - `make k8s-status` - Show status of all K8s resources
 - `make k8s-logs` - Show logs for all services
-- `make generate-crds` - Generate CRD manifests
 
 ### Testing
 - `make test-coverage` - Run tests with coverage report

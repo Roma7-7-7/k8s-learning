@@ -89,7 +89,7 @@ docker-build-controller:
 	docker build -f docker/Dockerfile.controller -t $(DOCKER_REGISTRY)/$(CONTROLLER_BINARY):$(IMAGE_TAG) .
 
 docker-build-ui:
-	docker build -f docker/ui.Dockerfile -t $(DOCKER_REGISTRY)/text-ui:$(IMAGE_TAG) .
+	docker build -f docker/Dockerfile.web -t $(DOCKER_REGISTRY)/text-ui:$(IMAGE_TAG) .
 
 # Push Docker images
 docker-push: docker-push-api docker-push-worker docker-push-controller docker-push-ui
