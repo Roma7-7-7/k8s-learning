@@ -1,7 +1,13 @@
 #!/bin/bash
 
+# DEPRECATED: Use 'make k8s-redeploy SERVICE=controller' instead
+# This script is kept for backwards compatibility
+
 set -e
 
+echo "⚠️  DEPRECATED: This script is deprecated"
+echo "Use: make k8s-redeploy SERVICE=controller"
+echo ""
 echo "🚀 Quick Controller Redeploy"
 echo "=========================="
 

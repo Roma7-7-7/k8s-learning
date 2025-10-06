@@ -264,29 +264,68 @@ After completing each significant task or implementation milestone:
 
 ## Development Commands
 
+The build system uses a **parameterized approach** with `SERVICE=<name>` for flexible operations:
+
 ### Core Development Workflow
 ```bash
 make fmt          # Format Go code
-make lint         # Run golangci-lint for code quality checks  
+make lint         # Run golangci-lint for code quality checks
 make test         # Run all tests
-make build        # Build all binaries
+make build        # Build all Go services
 make all          # Format, lint, test, and build
 ```
 
-### Build Commands
+### Parameterized Build System
+
+**Services:** `api`, `worker`, `controller`, `web`
+
+All major commands support `SERVICE` parameter:
+- Omit `SERVICE` or use `SERVICE=all` for all services
+- Specify `SERVICE=<name>` for single service
+- Specify `SERVICE="svc1 svc2"` for multiple services
+
 ```bash
-make build-api           # Build API service
-make build-worker        # Build worker service  
-make build-controller    # Build controller service
-make build-stress-test   # Build stress testing tool
+# Build examples
+make build                      # Build all services
+make build SERVICE=api          # Build only API
+make build SERVICE="api worker" # Build multiple services
+
+# Run locally (requires SERVICE)
+make run SERVICE=api            # Build and run API
+make run SERVICE=controller     # Build and run controller
+
+# Docker build
+make docker-build               # Build all Docker images
+make docker-build SERVICE=web   # Build only web image
+
+# Kubernetes build
+make k8s-build                  # Build all K8s images
+make k8s-build SERVICE=worker   # Build only worker image
 ```
 
-### Run Commands  
+### Kubernetes Workflow Commands
+
 ```bash
-make run-api           # Build and run API service
-make run-worker        # Build and run worker service
-make run-controller    # Build and run controller service
-make run-stress-test   # Build and run stress test with default parameters
+# Full deployment (all services)
+make k8s-local         # Build, load, deploy all services
+make k8s-build         # Build Docker images
+make k8s-load          # Load images into minikube
+make k8s-deploy        # Deploy to K8s
+
+# Fast single-service redeploy (replaces old redeploy-controller script)
+make k8s-redeploy SERVICE=controller  # Rebuild + redeploy controller
+make k8s-redeploy SERVICE=api         # Rebuild + redeploy API
+
+# Quick reload without full deploy
+make k8s-reload                       # Rebuild + reload all images
+make k8s-reload SERVICE=worker        # Rebuild + reload worker only
+
+# Utilities
+make k8s-status                       # Show resource status
+make k8s-logs                         # Show all service logs
+make k8s-logs SERVICE=controller      # Follow controller logs (live)
+make k8s-restart                      # Restart all deployments
+make k8s-restart SERVICE=api          # Restart API deployment only
 ```
 
 ### Testing Commands
@@ -297,15 +336,14 @@ make run-stress-test   # Run load/stress testing
 make test-autoscaling  # Test queue-based auto-scaling demonstration
 ```
 
-### Kubernetes Commands
-```bash
-make k8s-build         # Build Docker images for Kubernetes
-make k8s-deploy        # Deploy to Kubernetes using kustomize
-make k8s-local         # Complete local K8s workflow (build, load, deploy)
-make k8s-status        # Show status of all K8s resources
-make k8s-logs          # Show logs for all services
-make redeploy-controller  # Quick controller redeploy for development
-```
+### Adding New Services
+
+When adding a new service:
+1. Add to `SERVICES` list in Makefile (top of file)
+2. Add to `GO_SERVICES` if it's a Go service
+3. Create `cmd/<service>/main.go`
+4. Create `docker/Dockerfile.<service>`
+5. No other Makefile changes needed - parameterized targets handle it automatically
 
 ### Code Quality
 - Always run `make lint` before committing changes

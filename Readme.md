@@ -70,23 +70,39 @@ The system consists of five main components:
 
 ## Development Commands
 
+All commands support `SERVICE=<name>` parameter for single-service operations:
+
 ```bash
 # Core workflow
 make all           # Format, lint, test, and build
-make build         # Build all binaries
-make test          # Run tests
-make lint          # Run linter
+make build         # Build all Go services
+make build SERVICE=api  # Build only API
 
-# Kubernetes
-make k8s-build     # Build Docker images
-make k8s-deploy    # Deploy to K8s
-make k8s-logs      # View logs
+# Local development
+make run SERVICE=api    # Run service locally
+make setup-dev          # Setup .env and directories
+
+# Kubernetes - All services
+make k8s-local          # Complete workflow: build, load, deploy
+make k8s-build          # Build Docker images
+make k8s-deploy         # Deploy to K8s
+
+# Kubernetes - Single service (fast iteration)
+make k8s-redeploy SERVICE=controller  # Quick redeploy
+make k8s-build SERVICE=worker         # Build specific service
+make k8s-logs SERVICE=api             # Follow service logs
 
 # Testing
 make test-coverage      # Coverage report
 make run-stress-test    # Load testing
 make test-autoscaling   # Auto-scaling demo
 ```
+
+**Examples:**
+- `make build` - Build all services
+- `make build SERVICE="api worker"` - Build multiple services
+- `make k8s-redeploy SERVICE=controller` - Fast controller update
+- `make k8s-logs SERVICE=worker` - Stream worker logs
 
 ## Configuration
 
