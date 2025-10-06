@@ -248,16 +248,19 @@ After completing each significant task or implementation milestone:
    - Document any new dependencies or architectural decisions
    - Add to the Code Review Checklist if new patterns are established
 
-2. **Update README.md** (if necessary):
-   - Update build status or completion phases
-   - Add new API endpoints or features to documentation
-   - Update deployment instructions if changed
-   - Modify architecture diagrams if significant changes made
+2. **Update STATUS.md**:
+   - Move items from Pending to Completed as features are implemented
+   - Add new pending items as they are identified
+   - Update feature descriptions with implementation details
 
-3. **Commit Changes**:
+3. **Update README.md** (if necessary):
+   - Update quick start instructions if setup changes
+   - Add new make commands to Development Commands section
+   - Keep it minimal - detailed docs belong in STATUS.md or separate docs
+
+4. **Commit Changes**:
    - Use descriptive commit messages following conventional commits
    - Include both implementation and documentation updates in commits
-   - Update any relevant phase completion status
 
 ## Development Commands
 
@@ -360,4 +363,4 @@ When reviewing or suggesting changes, ensure:
 - [ ] Controllers implement graceful shutdown
 - [ ] Web UI is accessible and responsive
 - [ ] No unnecessary JavaScript dependencies
-- [ ] Documentation updated (CLAUDE.md and README.md if needed)
+- [ ] Documentation updated (STATUS.md for features, CLAUDE.md for standards, README.md for setup changes)
