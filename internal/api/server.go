@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rsav/k8s-learning/internal/api/handlers"
 	"github.com/rsav/k8s-learning/internal/api/middleware"
 	"github.com/rsav/k8s-learning/internal/config"
@@ -83,6 +84,9 @@ func (s *Server) setupRoutes() {
 	mux.HandleFunc("GET /ready", healthHandler.Ready)
 	mux.HandleFunc("GET /stats", healthHandler.Stats)
 
+	// Prometheus metrics endpoint
+	mux.Handle("GET /metrics", promhttp.Handler())
+
 	mux.HandleFunc("POST /api/v1/jobs", jobHandler.CreateJob)
 	mux.HandleFunc("GET /api/v1/jobs", jobHandler.ListJobs)
 	mux.HandleFunc("GET /api/v1/jobs/{id}", jobHandler.GetJob)
@@ -92,6 +96,7 @@ func (s *Server) setupRoutes() {
 		middleware.RecoveryMiddleware(s.log),
 		middleware.RequestIDMiddleware(),
 		middleware.LoggingMiddleware(s.log),
+		middleware.MetricsMiddleware(),
 		middleware.CORSMiddleware(),
 		middleware.SecurityHeadersMiddleware(),
 		middleware.MaxRequestSizeMiddleware(s.config.Storage.MaxFileSize),

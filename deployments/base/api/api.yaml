@@ -16,6 +16,10 @@ spec:
       labels:
         app: api
         component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
       initContainers:
       - name: wait-for-postgres
@@ -61,11 +65,11 @@ spec:
           mountPath: /app/results
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
+            memory: "32Mi"
+            cpu: "10m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "64Mi"
+            cpu: "50m"
         livenessProbe:
           httpGet:
             path: /health
@@ -90,7 +94,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: api-service
+  name: api
   namespace: k8s-learning
   labels:
     app: api

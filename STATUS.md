@@ -87,6 +87,35 @@ Multi-stage Docker builds with:
 - **Configuration Management**: Environment variables with sensible defaults
 - **Database Migrations**: golang-migrate integration with automatic execution
 
+### **Monitoring & Observability** ⚡ In Progress
+Complete monitoring stack with Prometheus and Grafana:
+- **Prometheus**: Metrics collection from API service and Kubernetes components
+  - HTTP request metrics (rate, duration, size)
+  - Job creation and queue metrics
+  - Database and Redis operation metrics (metrics defined, tracking pending)
+  - Kubernetes API server, nodes, and pod metrics
+  - Service discovery for automatic target detection
+  - RBAC permissions for cluster-wide scraping
+- **Grafana**: Visualization and dashboards
+  - Pre-configured Prometheus datasource
+  - Sample API service dashboard with HTTP, job, and resource metrics
+  - NodePort access (port 30300) for easy local access
+  - Admin credentials: admin/admin
+- **API Service Instrumentation**:
+  - Custom metrics middleware for HTTP tracking
+  - `/metrics` endpoint for Prometheus scraping
+  - Pod annotations for automatic discovery
+- See [docs/MONITORING.md](docs/MONITORING.md) for detailed setup and usage
+
+#### Still Pending:
+- Distributed tracing with Jaeger or similar
+- Structured logging aggregation (ELK/Loki)
+- Alert rules and notification channels
+- Persistent storage for Prometheus data
+- Dashboard provisioning via ConfigMaps
+- Metrics for Worker and Controller services
+- Database and Redis operation tracking implementation
+
 ## 📋 Pending
 
 ### **Production Configuration**
@@ -99,13 +128,6 @@ Multi-stage Docker builds with:
 - GitHub Actions or GitLab CI workflows
 - Container image scanning and vulnerability checks
 - Automated rollback on failures
-
-### **Monitoring & Observability**
-- Prometheus metrics collection setup
-- Grafana dashboards for visualization
-- Distributed tracing with Jaeger or similar
-- Structured logging aggregation (ELK/Loki)
-- Alert rules and notification channels
 
 ### **Security Enhancements**
 - Enhanced RBAC policies

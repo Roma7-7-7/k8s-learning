@@ -35,7 +35,7 @@ else
 	SELECTED_GO_SERVICES=$(filter $(SERVICE),$(GO_SERVICES))
 endif
 
-.PHONY: all build clean test deps fmt lint help web
+.PHONY: all build clean test deps fmt lint help web grafana prometheus monitoring-status
 
 # Default target
 all: fmt test build
@@ -191,7 +191,7 @@ k8s-reload: k8s-build k8s-load
 k8s-port-forward:
 	@echo "🔌 Port forwarding API service to http://localhost:8080"
 	@echo "Press Ctrl+C to stop"
-	@kubectl port-forward svc/api-service 8080:8080 -n $(K8S_NAMESPACE)
+	@kubectl port-forward svc/api 8080:8080 -n $(K8S_NAMESPACE)
 
 k8s-status:
 	@echo "=== Pods ==="
@@ -224,6 +224,28 @@ k8s-restart:
 		kubectl rollout restart deployment/$(SERVICE) -n $(K8S_NAMESPACE); \
 	fi
 	@echo "✅ Restart initiated"
+
+#
+# Monitoring
+#
+
+grafana:
+	@echo "🔌 Port forwarding Grafana to http://localhost:3000"
+	@echo "📊 Default credentials: admin/admin"
+	@echo "Press Ctrl+C to stop"
+	@kubectl port-forward -n monitoring svc/grafana 3000:3000
+
+prometheus:
+	@echo "🔌 Port forwarding Prometheus to http://localhost:9090"
+	@echo "Press Ctrl+C to stop"
+	@kubectl port-forward -n monitoring svc/prometheus 9090:9090
+
+monitoring-status:
+	@echo "=== Monitoring Pods ==="
+	@kubectl get pods -n monitoring -o wide
+	@echo ""
+	@echo "=== Monitoring Services ==="
+	@kubectl get svc -n monitoring
 
 #
 # Development Helpers
@@ -298,6 +320,11 @@ help:
 	@echo "  k8s-status         Show K8s resource status"
 	@echo "  k8s-logs           Show logs [SERVICE=all or specific]"
 	@echo "  k8s-port-forward   Port forward API to localhost:8080"
+	@echo ""
+	@echo "Monitoring:"
+	@echo "  grafana            Port forward Grafana to localhost:3000"
+	@echo "  prometheus         Port forward Prometheus to localhost:9090"
+	@echo "  monitoring-status  Show monitoring stack status"
 	@echo ""
 	@echo "Test Targets:"
 	@echo "  test               Run unit tests"

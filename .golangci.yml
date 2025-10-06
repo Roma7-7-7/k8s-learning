@@ -455,6 +455,10 @@ linters:
         linters:
           - gochecknoglobals
           - gochecknoinits
+      - path: 'internal/api/metrics/metrics\.go'
+        linters:
+          - gochecknoglobals
+          - gochecknoinits
       # Allow returning client.Client interface (controller-runtime pattern)
       - path: 'cmd/controller/main\.go'
         text: 'initKubernetesClient returns interface'

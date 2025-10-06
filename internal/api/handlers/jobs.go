@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rsav/k8s-learning/internal/api/metrics"
 	"github.com/rsav/k8s-learning/internal/storage/database"
 	"github.com/rsav/k8s-learning/internal/storage/queue"
 )
@@ -119,6 +120,11 @@ func (jh *Job) CreateJob(w http.ResponseWriter, r *http.Request) {
 		jh.writeErrorWithCode(w, http.StatusInternalServerError, "failed to queue job", "QUEUE_ERROR")
 		return
 	}
+
+	// Track metrics
+	metrics.JobsCreatedTotal.Inc()
+	priority := strconv.Itoa(queueMessage.Priority)
+	metrics.JobsQueuedTotal.WithLabelValues(priority).Inc()
 
 	jh.log.Info("job created successfully",
 		"job_id", job.ID,
