@@ -42,12 +42,13 @@ make k8s-delete
 
 ## Architecture
 
-The system consists of five main components:
+The system consists of six main components:
 
 - **API Service**: REST API for job submission and status (`text-api`)
 - **Worker Service**: Background job processor with auto-scaling (`text-worker`)
 - **Controller Service**: Queue-based auto-scaler (`text-controller`)
 - **Web UI**: Static interface for job management (`text-ui`)
+- **Monitoring**: Prometheus and Grafana for metrics and visualization
 - **Infrastructure**: PostgreSQL database and Redis queue
 
 ### Processing Types
@@ -67,6 +68,7 @@ The system consists of five main components:
 - `GET /health` - Health check
 - `GET /ready` - Readiness probe
 - `GET /stats` - Queue statistics
+- `GET /metrics` - Prometheus metrics
 
 ## Development Commands
 
@@ -96,6 +98,11 @@ make k8s-logs SERVICE=api             # Follow service logs
 make test-coverage      # Coverage report
 make run-stress-test    # Load testing
 make test-autoscaling   # Auto-scaling demo
+
+# Monitoring
+kubectl apply -f deployments/base/monitoring/monitoring.yaml  # Deploy
+kubectl port-forward -n monitoring svc/grafana 3000:3000     # Access Grafana
+kubectl port-forward -n monitoring svc/prometheus 9090:9090  # Access Prometheus
 ```
 
 **Examples:**
@@ -123,6 +130,7 @@ See `.env.distro` for configuration template. All services use environment varia
 - [STATUS.md](STATUS.md) - Implementation status and roadmap
 - [CLAUDE.md](CLAUDE.md) - Development guidelines and standards
 - [docs/AUTO_SCALING.md](docs/AUTO_SCALING.md) - Auto-scaling architecture
+- [docs/MONITORING.md](docs/MONITORING.md) - Monitoring setup and metrics
 - [api-tests.http](api-tests.http) - API testing suite for JetBrains IDEs
 
 ## Project Structure

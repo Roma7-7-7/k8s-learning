@@ -336,6 +336,30 @@ make run-stress-test   # Run load/stress testing
 make test-autoscaling  # Test queue-based auto-scaling demonstration
 ```
 
+### Monitoring Commands
+```bash
+# Deploy monitoring stack
+kubectl apply -f deployments/base/monitoring/monitoring.yaml
+
+# Access Grafana (NodePort on 30300)
+minikube service grafana -n monitoring --url
+# Or use port-forward: kubectl port-forward -n monitoring svc/grafana 3000:3000
+# Default credentials: admin/admin
+
+# Access Prometheus
+kubectl port-forward -n monitoring svc/prometheus 9090:9090
+
+# Check monitoring pods
+kubectl get pods -n monitoring
+
+# View API metrics directly
+kubectl port-forward -n k8s-learning svc/api 8080:8080
+curl http://localhost:8080/metrics
+
+# Remove monitoring stack
+kubectl delete -f deployments/base/monitoring/monitoring.yaml
+```
+
 ### Adding New Services
 
 When adding a new service:
@@ -385,6 +409,44 @@ make run-stress-test
 ```
 
 See `docs/AUTO_SCALING.md` for comprehensive architecture details.
+
+## Monitoring
+
+### Prometheus Metrics
+
+All services should expose metrics via the `/metrics` endpoint for Prometheus scraping:
+
+**Standard Metrics to Expose:**
+- HTTP metrics: request count, duration, size (requests/responses)
+- Application-specific metrics: jobs, operations, events
+- Resource metrics: database connections, cache hits/misses
+- Error metrics: error rates, failure counts
+
+**Metric Naming Conventions:**
+- Use snake_case (e.g., `http_requests_total`)
+- Include units in metric names (e.g., `_seconds`, `_bytes`, `_total`)
+- Use appropriate metric types:
+  - Counter: monotonically increasing values (e.g., `requests_total`)
+  - Gauge: values that can go up or down (e.g., `connections_active`)
+  - Histogram: distributions (e.g., `request_duration_seconds`)
+
+**Pod Annotations for Scraping:**
+Add these annotations to enable Prometheus scraping:
+```yaml
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+```
+
+### Grafana Dashboards
+
+- Create dashboard JSON files in `deployments/base/monitoring/dashboards/`
+- Include panels for key metrics: latency, throughput, errors, resource usage
+- Use consistent color schemes and units
+- Add threshold lines for SLOs/SLAs
+
+See `docs/MONITORING.md` for detailed setup and dashboard creation.
 
 ## Code Review Checklist
 When reviewing or suggesting changes, ensure:
