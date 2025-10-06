@@ -35,13 +35,20 @@ You are preparing a GitHub Pull Request for review. Follow these steps:
    - Verify Kubernetes manifests have proper labels and resource limits (if applicable)
 
 6. **Prepare PR Description:**
-   - Create a comprehensive PR description with:
-     - **Summary:** Brief overview of changes (2-3 sentences)
-     - **Changes:** Bulleted list of what was implemented
-     - **Testing:** How to test the changes
-     - **Documentation:** What docs were updated
-     - **Checklist:** Any remaining items or follow-ups
+   - Create a CONCISE PR description that can be read in ~5 minutes maximum
+   - **CRITICAL**: Only document changes visible in `git diff main...HEAD`
+   - **DO NOT include**:
+     - Intermediate fixes made during development that don't appear in final diff
+     - Implementation details from conversation that were changed/reverted
+     - Bug fixes that were part of the same PR and never existed in main
+     - Verbose explanations or step-by-step testing procedures
+   - **DO include**:
+     - **Summary:** 2-3 sentence overview of what was added/changed
+     - **Key Changes:** Bulleted list organized by component/area (be brief!)
+     - **Testing:** Minimal commands to verify functionality
+     - **Related:** Links to relevant documentation
    - Use markdown formatting for clarity
+   - Keep it scannable - reviewers should understand changes in 5 minutes
 
 7. **Push and Update PR:**
    - If documentation was updated, stage and commit changes:
@@ -58,7 +65,9 @@ You are preparing a GitHub Pull Request for review. Follow these steps:
      - Link to the PR for easy access
 
 **Important Notes:**
-- Be thorough but concise in your analysis
+- **Keep PR description CONCISE** - Target 5 minute read time
+- **Only describe final state** - Don't document the development journey or intermediate fixes
+- **Focus on what reviewers will see** - If it's not in `git diff main...HEAD`, don't mention it
 - If something is missing from the implementation, clearly flag it
 - Don't make assumptions - verify by reading actual code changes
 - Ensure PR description is clear enough for reviewers who aren't familiar with the codebase
