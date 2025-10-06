@@ -27,27 +27,6 @@ data:
         static_configs:
           - targets: ['localhost:9090']
 
-      # Scrape API service
-      - job_name: 'api'
-        kubernetes_sd_configs:
-          - role: endpoints
-            namespaces:
-              names:
-                - k8s-learning
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_service_name]
-            action: keep
-            regex: api
-          - source_labels: [__meta_kubernetes_endpoint_port_name]
-            action: keep
-            regex: http
-          - source_labels: [__meta_kubernetes_namespace]
-            target_label: namespace
-          - source_labels: [__meta_kubernetes_service_name]
-            target_label: service
-          - source_labels: [__meta_kubernetes_pod_name]
-            target_label: pod
-
       # Scrape Kubernetes API server
       - job_name: 'kubernetes-apiservers'
         kubernetes_sd_configs:

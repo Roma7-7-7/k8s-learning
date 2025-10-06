@@ -103,7 +103,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(http_requests_total{service=\"api\"}[5m])) by (method, path)",
+          "expr": "sum(rate(http_requests_total{app=\"api\"}[5m])) by (method, path)",
           "legendFormat": "{{method}} {{path}}",
           "range": true,
           "refId": "A"
@@ -195,7 +195,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"api\"}[5m])) by (le, path))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{app=\"api\"}[5m])) by (le, path))",
           "legendFormat": "{{path}} (p95)",
           "range": true,
           "refId": "A"
@@ -287,7 +287,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(http_requests_total{service=\"api\"}[5m])) by (status)",
+          "expr": "sum(rate(http_requests_total{app=\"api\"}[5m])) by (status)",
           "legendFormat": "{{status}}",
           "range": true,
           "refId": "A"
@@ -379,8 +379,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(jobs_created_total[5m])",
-          "legendFormat": "Jobs/sec",
+          "expr": "rate(jobs_created_total{app=\"api\"}[5m])",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -628,7 +628,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(http_requests_total{service=\"api\",status=~\"5..\"}[5m]))",
+          "expr": "sum(rate(http_requests_total{app=\"api\",status=~\"5..\"}[5m]))",
           "range": true,
           "refId": "A"
         }
@@ -696,7 +696,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "avg(up{job=\"api\"})",
+          "expr": "avg(up{app=\"api\"})",
           "range": true,
           "refId": "A"
         }
@@ -760,7 +760,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(increase(http_requests_total{service=\"api\"}[24h]))",
+          "expr": "sum(increase(http_requests_total{app=\"api\"}[24h]))",
           "range": true,
           "refId": "A"
         }
@@ -824,7 +824,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "count(up{job=\"api\"})",
+          "expr": "count(up{app=\"api\"})",
           "range": true,
           "refId": "A"
         }
