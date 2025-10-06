@@ -20,15 +20,18 @@ const (
 	WorkerDeploymentName      = "worker"
 	WorkerDeploymentNamespace = "k8s-learning"
 
-	DefaultMinReplicas = 1
-	DefaultMaxReplicas = 10
-	ScaleUpThreshold   = 20 // Scale up when queue depth > 20
-	ScaleDownThreshold = 5  // Scale down when queue depth < 5
-	JobsPerWorker      = 10 // Estimated jobs per worker capacity
+	DefaultMinReplicas    = 1
+	DefaultMaxReplicas    = 10
+	ScaleUpThreshold      = 20 // Scale up when queue depth > 20
+	ScaleDownThreshold    = 5  // Scale down when queue depth < 5
+	JobsPerWorker         = 10 // Estimated jobs per worker capacity
+	MaxScaleUpIncrement   = 2  // Maximum replicas to add per scaling event
+	MaxScaleDownDecrement = 1  // Maximum replicas to remove per scaling event
 )
 
 type Worker struct {
 	client.Client
+
 	Log    *slog.Logger
 	Queue  *queue.RedisQueue
 	Config config.Controller
@@ -122,7 +125,7 @@ func (r *Worker) scaleWorkerDeployment(ctx context.Context) error {
 	return nil
 }
 
-// QueueStats holds queue and worker statistics
+// QueueStats holds queue and worker statistics.
 type QueueStats struct {
 	TotalDepth    int64
 	ActiveWorkers int
@@ -160,22 +163,27 @@ func (r *Worker) calculateOptimalReplicas(stats *QueueStats, currentReplicas int
 	// Calculate optimal replicas based on queue depth
 	var targetReplicas int32
 
-	if queueDepth == 0 {
+	switch {
+	case queueDepth == 0:
 		// No jobs in queue - scale down to minimum
 		targetReplicas = DefaultMinReplicas
-	} else if queueDepth > ScaleUpThreshold {
+	case queueDepth > ScaleUpThreshold:
 		// High queue depth - scale up
 		// Formula: ceil(queueDepth / JobsPerWorker) but limit growth rate
 		needed := (queueDepth + JobsPerWorker - 1) / JobsPerWorker // Ceiling division
-		neededReplicas := int32(needed)
-		if neededReplicas < 0 { // Overflow protection
+
+		// Safe conversion with overflow protection
+		var neededReplicas int32
+		if needed > int64(DefaultMaxReplicas) || needed < 0 {
 			neededReplicas = DefaultMaxReplicas
+		} else {
+			neededReplicas = int32(needed) // #nosec G115 - overflow checked above
 		}
-		targetReplicas = min(currentReplicas+2, neededReplicas) // Scale up by max 2 at a time
-	} else if queueDepth < ScaleDownThreshold && currentReplicas > DefaultMinReplicas {
+		targetReplicas = minInt32(currentReplicas+MaxScaleUpIncrement, neededReplicas)
+	case queueDepth < ScaleDownThreshold && currentReplicas > DefaultMinReplicas:
 		// Low queue depth - scale down gradually
-		targetReplicas = currentReplicas - 1
-	} else {
+		targetReplicas = currentReplicas - MaxScaleDownDecrement
+	default:
 		// Queue depth is in acceptable range - no change
 		targetReplicas = currentReplicas
 	}
@@ -234,7 +242,7 @@ func (r *Worker) updateDeploymentReplicas(ctx context.Context, _ *appsv1.Deploym
 }
 
 // minInt32 returns the minimum of two int32 values.
-func min(a, b int32) int32 {
+func minInt32(a, b int32) int32 {
 	if a < b {
 		return a
 	}

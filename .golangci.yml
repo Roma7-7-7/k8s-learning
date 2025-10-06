@@ -446,3 +446,17 @@ linters:
           - gosec
           - noctx
           - wrapcheck
+      # Allow global variables and init functions for controller-runtime and Prometheus registration
+      - path: 'cmd/controller/main\.go'
+        linters:
+          - gochecknoglobals
+          - gochecknoinits
+      - path: 'internal/controller/metrics/metrics\.go'
+        linters:
+          - gochecknoglobals
+          - gochecknoinits
+      # Allow returning client.Client interface (controller-runtime pattern)
+      - path: 'cmd/controller/main\.go'
+        text: 'initKubernetesClient returns interface'
+        linters:
+          - ireturn

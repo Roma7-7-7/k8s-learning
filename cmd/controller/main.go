@@ -34,37 +34,15 @@ func init() {
 }
 
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-
 	// Setup signal handling
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-
-	opts := zap.Options{
-		Development: true,
-	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
-
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	// Parse flags and setup logger
+	metricsAddr, probeAddr, enableLeaderElection := parseFlags()
 
 	// Load configuration
-	cfg, err := config.LoadController()
-	if err != nil {
-		setupLog.Error(err, "unable to load controller configuration")
-		os.Exit(1)
-	}
-
-	// Note: We accept command line flags for compatibility with deployment
-	// but don't use them since we've simplified the controller
+	cfg := loadConfig()
 
 	// Setup structured logger
 	log := setupLogger(cfg.Logging)
@@ -75,74 +53,133 @@ func main() {
 		"leader_election", enableLeaderElection,
 		"reconcile_interval", cfg.ReconcileInterval)
 
-	// Connect to Redis
+	// Initialize components
+	redisQueue := initRedis(ctx, cfg, log)
+	k8sClient := initKubernetesClient()
+	workerScaler := createWorkerScaler(k8sClient, log, redisQueue, cfg)
+
+	// Start metrics collection
+	metricsCollector := metrics.NewMetricsCollector(redisQueue, log)
+	go metricsCollector.StartPeriodicCollection(ctx, cfg.MetricsCollectionInterval)
+
+	// Start servers
+	metricsServer := startMetricsServer(ctx, metricsAddr, log)
+	healthServer := startHealthServer(ctx, probeAddr, log)
+
+	// Setup graceful shutdown
+	setupGracefulShutdown(ctx, log, metricsServer, healthServer)
+
+	// Start worker scaler (blocking)
+	setupLog.Info("starting worker scaler")
+	workerScaler.StartPeriodicScaling(ctx)
+}
+
+func parseFlags() (string, string, bool) {
+	var metricsAddr, probeAddr string
+	var enableLeaderElection bool
+
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election for controller manager.")
+
+	opts := zap.Options{Development: true}
+	opts.BindFlags(flag.CommandLine)
+	flag.Parse()
+
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	return metricsAddr, probeAddr, enableLeaderElection
+}
+
+func loadConfig() *config.Controller {
+	cfg, err := config.LoadController()
+	if err != nil {
+		setupLog.Error(err, "unable to load controller configuration")
+		os.Exit(1)
+	}
+	return cfg
+}
+
+func initRedis(ctx context.Context, cfg *config.Controller, log *slog.Logger) *queue.RedisQueue {
 	redisQueue, err := queue.NewRedisQueue(cfg.Redis, log)
 	if err != nil {
 		log.ErrorContext(ctx, "failed to connect to Redis", "error", err)
 		os.Exit(1)
-	} else {
-		log.InfoContext(ctx, "Redis connection established for queue monitoring")
 	}
+	log.InfoContext(ctx, "Redis connection established for queue monitoring")
+	return redisQueue
+}
 
-	// Setup Kubernetes client directly (no controller-runtime manager needed)
+func initKubernetesClient() client.Client {
 	k8sConfig := ctrl.GetConfigOrDie()
 	k8sClient, err := client.New(k8sConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "unable to create Kubernetes client")
 		os.Exit(1)
 	}
+	return k8sClient
+}
 
-	// Setup worker scaler with direct client
-	workerScaler := &scaler.Worker{
+func createWorkerScaler(k8sClient client.Client, log *slog.Logger, redisQueue *queue.RedisQueue, cfg *config.Controller) *scaler.Worker {
+	return &scaler.Worker{
 		Client: k8sClient,
 		Log:    log,
 		Queue:  redisQueue,
 		Config: *cfg,
 	}
+}
 
-	metricsCollector := metrics.NewMetricsCollector(redisQueue, log)
-	go metricsCollector.StartPeriodicCollection(ctx, cfg.MetricsCollectionInterval)
-
-	// Start metrics server
-	metricsServer := &http.Server{
-		Addr:    metricsAddr,
-		Handler: promhttp.Handler(),
+func startMetricsServer(ctx context.Context, addr string, log *slog.Logger) *http.Server {
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           promhttp.Handler(),
+		ReadHeaderTimeout: httpReadHeaderTimeout,
 	}
 	go func() {
-		log.InfoContext(ctx, "starting metrics server", "addr", metricsAddr)
-		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.InfoContext(ctx, "starting metrics server", "addr", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			setupLog.Error(err, "metrics server failed")
 		}
 	}()
+	return server
+}
 
-	// Start health check server
+func startHealthServer(ctx context.Context, addr string, log *slog.Logger) *http.Server {
 	healthMux := http.NewServeMux()
-	healthMux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	healthMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
-	healthMux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+	healthMux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
-	healthServer := &http.Server{
-		Addr:    probeAddr,
-		Handler: healthMux,
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           healthMux,
+		ReadHeaderTimeout: httpReadHeaderTimeout,
 	}
 	go func() {
-		log.InfoContext(ctx, "starting health server", "addr", probeAddr)
-		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.InfoContext(ctx, "starting health server", "addr", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			setupLog.Error(err, "health server failed")
 		}
 	}()
+	return server
+}
 
-	// Gracefully shutdown servers on context cancellation
+const (
+	shutdownTimeout       = 30 * time.Second
+	httpReadHeaderTimeout = 5 * time.Second
+)
+
+func setupGracefulShutdown(ctx context.Context, log *slog.Logger, metricsServer, healthServer *http.Server) {
 	go func() {
 		<-ctx.Done()
 		log.InfoContext(context.Background(), "shutting down servers")
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
 		if err := metricsServer.Shutdown(shutdownCtx); err != nil {
@@ -152,10 +189,6 @@ func main() {
 			setupLog.Error(err, "health server shutdown failed")
 		}
 	}()
-
-	// Start timer-based reconciliation (blocking call)
-	setupLog.Info("starting worker scaler")
-	workerScaler.StartPeriodicScaling(ctx)
 }
 
 func setupLogger(config config.Logging) *slog.Logger {

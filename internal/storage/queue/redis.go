@@ -19,9 +19,11 @@ const (
 	QueuePriority  = "text_tasks:priority"
 	QueueFailed    = "text_tasks:failed"
 	QueueHeartbeat = "workers:heartbeat"
-)
 
-const highPriorityThreshold = 5
+	highPriorityThreshold     = 5
+	heartbeatTTLMultiplier    = 2
+	heartbeatTTLBufferSeconds = 10
+)
 
 var ErrNoJobsAvailable = errors.New("no jobs available in the queue")
 
@@ -180,7 +182,7 @@ func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string, t
 	}
 
 	// Set heartbeat with a generous TTL buffer (2x heartbeat interval + buffer)
-	heartbeatTTL := ttl*2 + 10*time.Second
+	heartbeatTTL := ttl*heartbeatTTLMultiplier + heartbeatTTLBufferSeconds*time.Second
 	if err := rq.client.Set(ctx, key, data, heartbeatTTL).Err(); err != nil {
 		return fmt.Errorf("set worker heartbeat: %w", err)
 	}

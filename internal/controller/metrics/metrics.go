@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	// Queue metrics
+	// Queue metrics.
 	queueDepthGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "textprocessing_queue_depth",
@@ -54,7 +54,7 @@ var (
 		[]string{"controller"},
 	)
 
-	// Scaling metrics
+	// Scaling metrics.
 	autoscalingEventsCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "textprocessing_autoscaling_events_total",
@@ -94,22 +94,22 @@ func init() {
 	)
 }
 
-// MetricsCollector collects and updates Prometheus metrics
-type MetricsCollector struct {
+// Collector collects and updates Prometheus metrics.
+type Collector struct {
 	queue *queue.RedisQueue
 	log   *slog.Logger
 }
 
-// NewMetricsCollector creates a new metrics collector
-func NewMetricsCollector(queue *queue.RedisQueue, log *slog.Logger) *MetricsCollector {
-	return &MetricsCollector{
+// NewMetricsCollector creates a new metrics collector.
+func NewMetricsCollector(queue *queue.RedisQueue, log *slog.Logger) *Collector {
+	return &Collector{
 		queue: queue,
 		log:   log,
 	}
 }
 
-// StartPeriodicCollection starts periodic metrics collection
-func (m *MetricsCollector) StartPeriodicCollection(ctx context.Context, interval time.Duration) {
+// StartPeriodicCollection starts periodic metrics collection.
+func (m *Collector) StartPeriodicCollection(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -128,8 +128,8 @@ func (m *MetricsCollector) StartPeriodicCollection(ctx context.Context, interval
 	}
 }
 
-// CollectQueueMetrics collects queue-related metrics
-func (m *MetricsCollector) CollectQueueMetrics(ctx context.Context) error {
+// CollectQueueMetrics collects queue-related metrics.
+func (m *Collector) CollectQueueMetrics(ctx context.Context) error {
 	if m.queue == nil {
 		return nil
 	}
@@ -159,41 +159,41 @@ func (m *MetricsCollector) CollectQueueMetrics(ctx context.Context) error {
 	return nil
 }
 
-// RecordJobProcessed records a processed job
+// RecordJobProcessed records a processed job.
 func RecordJobProcessed(processingType, status string) {
 	jobsProcessedCounter.WithLabelValues(processingType, status).Inc()
 }
 
-// RecordReconciliation records a controller reconciliation
+// RecordReconciliation records a controller reconciliation.
 func RecordReconciliation(controller, result string, duration time.Duration) {
 	controllerReconciliationsCounter.WithLabelValues(controller, result).Inc()
 	controllerReconciliationDuration.WithLabelValues(controller).Observe(duration.Seconds())
 }
 
-// RecordAutoscalingEvent records an autoscaling event
+// RecordAutoscalingEvent records an autoscaling event.
 func RecordAutoscalingEvent(jobName, direction string) {
 	autoscalingEventsCounter.WithLabelValues(jobName, direction).Inc()
 }
 
-// UpdateReplicasMetrics updates replica count metrics
+// UpdateReplicasMetrics updates replica count metrics.
 func UpdateReplicasMetrics(jobName, processingType string, current, desired int32) {
 	currentReplicasGauge.WithLabelValues(jobName, processingType).Set(float64(current))
 	desiredReplicasGauge.WithLabelValues(jobName, processingType).Set(float64(desired))
 }
 
-// GetQueueDepth returns the current queue depth for a specific queue
+// GetQueueDepth returns the current queue depth for a specific queue.
 func GetQueueDepth(queueName string) float64 {
 	if gauge, err := queueDepthGauge.GetMetricWithLabelValues(queueName); err == nil {
 		metric := &dto.Metric{}
-		gauge.Write(metric)
+		_ = gauge.Write(metric)
 		return metric.GetGauge().GetValue()
 	}
 	return 0
 }
 
-// GetActiveWorkerCount returns the current number of active workers
+// GetActiveWorkerCount returns the current number of active workers.
 func GetActiveWorkerCount() float64 {
 	metric := &dto.Metric{}
-	activeWorkersGauge.Write(metric)
+	_ = activeWorkersGauge.Write(metric)
 	return metric.GetGauge().GetValue()
 }
