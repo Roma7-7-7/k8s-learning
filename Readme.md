@@ -52,27 +52,27 @@ A cloud-native text processing system built with Go and deployed on Kubernetes. 
 - ServiceAccount with minimal RBAC
 
 ### 3. Task Controller (`text-controller`)
-**Language**: Go using controller-runtime  
-**Type**: Kubernetes controller  
-**Purpose**: Watch custom resources, manage Kubernetes Jobs, auto-scale workers
+**Language**: Go using controller-runtime
+**Type**: Kubernetes controller
+**Purpose**: Auto-scale workers based on queue depth
 
 **Key Features**:
-- Custom Resource Definition (CRD) for TextProcessingJob
-- Controller pattern with reconciliation loops
-- Automatic worker scaling based on queue depth
-- Job lifecycle management
-- Metrics collection and reporting
+- Queue-based auto-scaling (monitors Redis queue depth)
+- Periodic reconciliation (every 30 seconds)
+- Intelligent scaling logic (scale up when queue > 20, scale down when queue < 5)
+- Prometheus metrics exposition
+- Health and readiness probes
+- Graceful shutdown handling
 
 **Dependencies**:
-- Kubernetes API
-- Redis (queue monitoring)
-- Custom Resource Definitions
+- Kubernetes API (scales worker deployment)
+- Redis (queue depth monitoring)
 
 **Kubernetes Resources**:
-- Deployment
-- CustomResourceDefinition (ImageProcessingJob)
-- ServiceAccount with Job management RBAC
-- ClusterRole and ClusterRoleBinding
+- Deployment (1 replica)
+- ServiceAccount with deployment update RBAC
+- Role and RoleBinding
+- Service (ClusterIP for metrics)
 
 ### 4. Web UI (`text-ui`)
 **Language**: HTML/CSS/JavaScript 
@@ -373,12 +373,28 @@ Background job processor with:
 - Graceful shutdown handling
 - Concurrent job processing
 
+#### **Auto-Scaling Controller (`text-controller`)**
+Queue-based auto-scaler with:
+- Redis queue depth monitoring (main + priority queues)
+- Periodic reconciliation every 30 seconds
+- Intelligent scaling logic:
+  - Scale up when queue depth > 20 jobs (add up to 2 workers, max 10)
+  - Scale down when queue depth < 5 jobs (remove 1 worker, min 1)
+  - Jobs per worker capacity: 10 jobs
+- Kubernetes deployment scaling using Patch operations
+- Prometheus metrics exposition (`queue_depth`, `active_workers`, `autoscaling_events`)
+- Health and readiness endpoints (`/healthz`, `/readyz`)
+- Graceful shutdown with signal handling
+- Structured logging with slog
+- See `docs/AUTO_SCALING.md` for detailed architecture
+
 #### **Kubernetes Infrastructure**
 Complete local deployment setup with:
 - **PostgreSQL**: Database deployment with automatic `textprocessing` database creation
 - **Redis**: Message queue and caching deployment
 - **API Service**: Kubernetes deployment with 2 replicas, health checks, and init containers
-- **Worker Service**: Kubernetes deployment with 2 replicas and shared storage
+- **Worker Service**: Kubernetes deployment with auto-scaling (1-10 replicas)
+- **Controller Service**: Auto-scaler deployment with RBAC permissions
 - **Storage**: Persistent volumes for database, Redis, uploads, and results
 - **Configuration**: ConfigMaps and Secrets for environment-specific settings
 - **Networking**: Internal ClusterIP services with port-forwarding for external access
@@ -388,25 +404,24 @@ Complete local deployment setup with:
 Multi-stage Docker builds with:
 - **API Image**: Optimized Go binary with migration files and non-root user
 - **Worker Image**: Lightweight Alpine-based image with text processing capabilities
+- **Controller Image**: Minimal Go binary with Kubernetes client libraries
 - **Security**: Non-root user, minimal base images, proper file permissions
 - **Build Scripts**: Automated image building and tagging
 
 #### **Development Tooling**
 - **Makefile**: Comprehensive build, test, and deployment targets
-- **Scripts**: Automated build (`build-images.sh`), deploy (`deploy-local.sh`), cleanup (`cleanup.sh`)
+- **Scripts**: Automated build (`build-images.sh`), deploy (`deploy-local.sh`), cleanup (`cleanup.sh`), redeploy controller (`redeploy-controller.sh`), test auto-scaling (`test-autoscaling.sh`)
 - **HTTP Client**: Complete API testing suite for JetBrains IDEs (`api-tests.http`)
+- **Stress Testing**: Dedicated stress test tool with configurable concurrency and delays
 - **Configuration Management**: Environment variables with sensible defaults
 - **Database Migrations**: golang-migrate integration with automatic execution
-
-### 🚧 In Progress
-- **Controller (`text-controller`)**: Kubernetes controller for custom resources and auto-scaling
 
 ### 📋 Pending
 - **Production Configuration**: Helm charts for production deployments
 - **CI/CD Pipeline**: Automated testing and deployment
-- **Monitoring**: Prometheus metrics and Grafana dashboards
+- **Monitoring**: Prometheus metrics collection and Grafana dashboards
 - **Observability**: Distributed tracing and structured logging aggregation
-- **Security**: RBAC, network policies, and security scanning
+- **Security**: Enhanced RBAC, network policies, and security scanning
 - **High Availability**: Multi-zone deployments and backup strategies
 
 ## API Endpoints
@@ -672,7 +687,7 @@ The HTTP client provides a complete testing environment without requiring extern
 - `make deps` - Download and tidy dependencies
 
 ### Building
-- `make build` - Build all binaries (api, worker, controller, stress-test)
+- `make build` - Build all binaries (api, worker, stress-test)
 - `make build-api` - Build API service only
 - `make build-worker` - Build worker service only
 - `make build-controller` - Build controller service only
@@ -683,6 +698,10 @@ The HTTP client provides a complete testing environment without requiring extern
 - `make run-worker` - Build and run worker service
 - `make run-controller` - Build and run controller service
 - `make run-stress-test` - Build and run stress test with default parameters
+
+### Auto-Scaling
+- `make test-autoscaling` - Run auto-scaling demonstration script
+- `make redeploy-controller` - Quick controller redeploy for development
 
 ### Docker
 - `make docker-build` - Build all Docker images
@@ -762,7 +781,8 @@ kubectl port-forward svc/api-service 8080:8080 -n k8s-learning
 - **PostgreSQL**: Database with automatic `textprocessing` database creation
 - **Redis**: Message queue and caching
 - **API Service**: REST API with 2 replicas
-- **Worker Service**: Background job processors with 2 replicas
+- **Worker Service**: Background job processors with auto-scaling (1-10 replicas)
+- **Controller Service**: Auto-scaler monitoring queue depth
 - **Init Containers**: Wait for database readiness before API startup
 
 **Storage:**
@@ -830,13 +850,15 @@ Migrations use environment-specific paths:
 
 **Resource Limits:**
 - **PostgreSQL**: 512MB memory, 500m CPU
-- **Redis**: 256MB memory, 200m CPU  
+- **Redis**: 256MB memory, 200m CPU
 - **API**: 512MB memory, 500m CPU
 - **Worker**: 512MB memory, 500m CPU
+- **Controller**: 512MB memory, 500m CPU
 
 **Scaling:**
 - API: 2 replicas (can be scaled horizontally)
-- Worker: 2 replicas (can be scaled based on queue depth)
+- Worker: Auto-scaled (1-10 replicas based on queue depth)
+- Controller: 1 replica (manages worker scaling)
 - Database/Redis: 1 replica (stateful services)
 
 ### Monitoring and Debugging
@@ -851,6 +873,7 @@ make k8s-logs
 # Debug specific service
 kubectl logs -l app=api -n k8s-learning --follow
 kubectl logs -l app=worker -n k8s-learning --follow
+kubectl logs -l app=controller -n k8s-learning --follow
 kubectl logs -l app=postgres -n k8s-learning
 kubectl logs -l app=redis -n k8s-learning
 
