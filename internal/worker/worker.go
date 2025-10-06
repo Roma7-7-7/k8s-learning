@@ -105,7 +105,7 @@ func (w *Worker) heartbeatLoop(ctx context.Context) {
 	ticker := time.NewTicker(w.config.HeartbeatInterval)
 	defer ticker.Stop()
 
-	if err := w.queue.SetWorkerHeartbeat(ctx, w.workerID); err != nil {
+	if err := w.queue.SetWorkerHeartbeat(ctx, w.workerID, w.config.HeartbeatInterval); err != nil {
 		w.log.ErrorContext(ctx, "failed to set initial heartbeat", "error", err, "worker_id", w.workerID)
 	}
 
@@ -116,7 +116,7 @@ func (w *Worker) heartbeatLoop(ctx context.Context) {
 		case <-w.shutdownCh:
 			return
 		case <-ticker.C:
-			if err := w.queue.SetWorkerHeartbeat(ctx, w.workerID); err != nil {
+			if err := w.queue.SetWorkerHeartbeat(ctx, w.workerID, w.config.HeartbeatInterval); err != nil {
 				w.log.ErrorContext(ctx, "failed to set heartbeat", "error", err, "worker_id", w.workerID)
 			} else {
 				w.log.DebugContext(ctx, "heartbeat sent", "worker_id", w.workerID)

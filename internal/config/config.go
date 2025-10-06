@@ -31,6 +31,12 @@ type Worker struct {
 	PollInterval      time.Duration `envconfig:"POLL_INTERVAL" default:"5s"`
 }
 
+type Controller struct {
+	Redis                     Redis
+	Logging                   Logging
+	ReconcileInterval         time.Duration `envconfig:"RECONCILE_INTERVAL" default:"30s"`
+	MetricsCollectionInterval time.Duration `envconfig:"METRICS_COLLECTION_INTERVAL" default:"15s"`
+}
 type Server struct {
 	Port            int           `envconfig:"PORT" default:"8080"`
 	Host            string        `envconfig:"HOST" default:"0.0.0.0"`
@@ -110,6 +116,27 @@ func LoadWorker() (*Worker, error) {
 	}
 
 	var config Worker
+
+	if err := envconfig.Process("", &config); err != nil {
+		return nil, fmt.Errorf("process environment variables: %w", err)
+	}
+
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
+
+	return &config, nil
+}
+
+func LoadController() (*Controller, error) {
+	// Try to load .env file for local development (ignore if not found)
+	if _, err := os.Stat(".env"); err == nil {
+		if err := godotenv.Load(".env"); err != nil {
+			return nil, fmt.Errorf("load .env file: %w", err)
+		}
+	}
+
+	var config Controller
 
 	if err := envconfig.Process("", &config); err != nil {
 		return nil, fmt.Errorf("process environment variables: %w", err)
@@ -207,6 +234,35 @@ func (w *Worker) Validate() error {
 	validLogFormats := []string{"json", "text"}
 	if !contains(validLogFormats, w.Logging.Format) {
 		return fmt.Errorf("invalid log format: %s", w.Logging.Format)
+	}
+
+	return nil
+}
+
+func (c *Controller) Validate() error {
+	// Redis port validation
+	if c.Redis.Port <= 0 || c.Redis.Port > 65535 {
+		return fmt.Errorf("invalid redis port: %d", c.Redis.Port)
+	}
+
+	// Controller validation
+	if c.ReconcileInterval <= 0 {
+		return errors.New("reconcile interval must be positive")
+	}
+
+	if c.MetricsCollectionInterval <= 0 {
+		return errors.New("metrics collection interval must be positive")
+	}
+
+	// Logging validation
+	validLogLevels := []string{"debug", "info", "warn", "error"}
+	if !contains(validLogLevels, c.Logging.Level) {
+		return fmt.Errorf("invalid log level: %s", c.Logging.Level)
+	}
+
+	validLogFormats := []string{"json", "text"}
+	if !contains(validLogFormats, c.Logging.Format) {
+		return fmt.Errorf("invalid log format: %s", c.Logging.Format)
 	}
 
 	return nil

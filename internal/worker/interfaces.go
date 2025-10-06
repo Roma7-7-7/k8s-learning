@@ -11,7 +11,7 @@ import (
 
 type JobConsumer interface {
 	ConsumeJob(ctx context.Context, timeout time.Duration) (*queue.SubmitJobMessage, error)
-	SetWorkerHeartbeat(ctx context.Context, workerID string) error
+	SetWorkerHeartbeat(ctx context.Context, workerID string, interval time.Duration) error
 	PublishToFailedQueue(ctx context.Context, message queue.SubmitJobMessage, errorMsg string) error
 	HealthCheck(ctx context.Context) error
 	Close() error

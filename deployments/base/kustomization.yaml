@@ -9,6 +9,7 @@ resources:
 - redis/redis.yaml
 - api/api.yaml
 - worker/worker.yaml
+- controller
 - web/web.yaml
 - ingress.yaml
 

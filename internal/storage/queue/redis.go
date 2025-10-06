@@ -19,9 +19,11 @@ const (
 	QueuePriority  = "text_tasks:priority"
 	QueueFailed    = "text_tasks:failed"
 	QueueHeartbeat = "workers:heartbeat"
-)
 
-const highPriorityThreshold = 5
+	highPriorityThreshold     = 5
+	heartbeatTTLMultiplier    = 2
+	heartbeatTTLBufferSeconds = 10
+)
 
 var ErrNoJobsAvailable = errors.New("no jobs available in the queue")
 
@@ -166,7 +168,7 @@ func (rq *RedisQueue) PublishToFailedQueue(ctx context.Context, message SubmitJo
 	return nil
 }
 
-func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string) error {
+func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string, ttl time.Duration) error {
 	key := fmt.Sprintf("%s:%s", QueueHeartbeat, workerID)
 	heartbeat := map[string]interface{}{
 		"worker_id": workerID,
@@ -179,7 +181,9 @@ func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string) e
 		return fmt.Errorf("marshal heartbeat: %w", err)
 	}
 
-	if err := rq.client.Set(ctx, key, data, 5*time.Minute).Err(); err != nil { //nolint: mnd // Use a reasonable expiration time for heartbeats
+	// Set heartbeat with a generous TTL buffer (2x heartbeat interval + buffer)
+	heartbeatTTL := ttl*heartbeatTTLMultiplier + heartbeatTTLBufferSeconds*time.Second
+	if err := rq.client.Set(ctx, key, data, heartbeatTTL).Err(); err != nil {
 		return fmt.Errorf("set worker heartbeat: %w", err)
 	}
 

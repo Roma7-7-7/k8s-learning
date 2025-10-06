@@ -27,6 +27,8 @@ kubectl wait --for=condition=available --timeout=300s deployment/redis -n k8s-le
 echo "Database and Redis are ready. Waiting for API and Worker..."
 kubectl wait --for=condition=available --timeout=300s deployment/api -n k8s-learning || echo "API deployment may need more time to be ready"
 kubectl wait --for=condition=available --timeout=300s deployment/worker -n k8s-learning || echo "Worker deployment may need more time to be ready"
+kubectl wait --for=condition=available --timeout=300s deployment/web -n k8s-learning || echo "Web deployment may need more time to be ready"
+kubectl wait --for=condition=available --timeout=300s deployment/controller -n k8s-learning || echo "Controller deployment may need more time to be ready"
 
 echo "Deployment completed!"
 echo ""
@@ -39,3 +41,4 @@ echo ""
 echo "To view logs:"
 echo "  kubectl logs -l app=api -n k8s-learning"
 echo "  kubectl logs -l app=worker -n k8s-learning"
+echo "  kubectl logs -l app=controller -n k8s-learning"
