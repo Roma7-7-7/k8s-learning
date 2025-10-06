@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	// HTTP metrics
+	// HTTPRequestsTotal tracks the total number of HTTP requests.
 	HTTPRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_total",
@@ -15,6 +15,7 @@ var (
 		[]string{"method", "path", "status"},
 	)
 
+	// HTTPRequestDuration tracks HTTP request duration in seconds.
 	HTTPRequestDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "http_request_duration_seconds",
@@ -24,6 +25,7 @@ var (
 		[]string{"method", "path"},
 	)
 
+	// HTTPRequestSize tracks HTTP request size in bytes.
 	HTTPRequestSize = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "http_request_size_bytes",
@@ -33,6 +35,7 @@ var (
 		[]string{"method", "path"},
 	)
 
+	// HTTPResponseSize tracks HTTP response size in bytes.
 	HTTPResponseSize = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "http_response_size_bytes",
@@ -42,7 +45,7 @@ var (
 		[]string{"method", "path"},
 	)
 
-	// Job metrics
+	// JobsCreatedTotal tracks the total number of jobs created.
 	JobsCreatedTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "jobs_created_total",
@@ -50,6 +53,7 @@ var (
 		},
 	)
 
+	// JobsQueuedTotal tracks the total number of jobs queued by priority.
 	JobsQueuedTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "jobs_queued_total",
@@ -58,7 +62,7 @@ var (
 		[]string{"priority"},
 	)
 
-	// Database metrics
+	// DBConnectionsActive tracks the number of active database connections.
 	DBConnectionsActive = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "db_connections_active",
@@ -66,6 +70,7 @@ var (
 		},
 	)
 
+	// DBQueriesTotal tracks the total number of database queries by operation.
 	DBQueriesTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "db_queries_total",
@@ -74,6 +79,7 @@ var (
 		[]string{"operation"},
 	)
 
+	// DBQueryDuration tracks database query duration in seconds.
 	DBQueryDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "db_query_duration_seconds",
@@ -83,7 +89,7 @@ var (
 		[]string{"operation"},
 	)
 
-	// Redis metrics
+	// RedisOperationsTotal tracks the total number of Redis operations.
 	RedisOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "redis_operations_total",
@@ -92,6 +98,7 @@ var (
 		[]string{"operation"},
 	)
 
+	// RedisOperationDuration tracks Redis operation duration in seconds.
 	RedisOperationDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "redis_operation_duration_seconds",

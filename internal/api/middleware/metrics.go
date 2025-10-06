@@ -8,7 +8,7 @@ import (
 	"github.com/rsav/k8s-learning/internal/api/metrics"
 )
 
-// MetricsMiddleware records HTTP request metrics
+// MetricsMiddleware records HTTP request metrics.
 func MetricsMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
