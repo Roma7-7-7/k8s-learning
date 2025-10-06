@@ -21,18 +21,12 @@ spec:
       - name: manager
         image: k8s-learning/controller:latest
         imagePullPolicy: IfNotPresent
-        args:
-        - "--leader-elect"
-        - "--metrics-bind-address=:8080"
-        - "--health-probe-bind-address=:8081"
         envFrom:
         - configMapRef:
             name: app-config
         - secretRef:
             name: app-secrets
         env:
-        - name: ENABLE_AUTO_SCALING
-          value: "false"
         - name: RECONCILE_INTERVAL
           value: "30s"
         - name: METRICS_COLLECTION_INTERVAL
