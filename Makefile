@@ -191,7 +191,7 @@ k8s-reload: k8s-build k8s-load
 k8s-port-forward:
 	@echo "🔌 Port forwarding API service to http://localhost:8080"
 	@echo "Press Ctrl+C to stop"
-	@kubectl port-forward svc/api-service 8080:8080 -n $(K8S_NAMESPACE)
+	@kubectl port-forward svc/api 8080:8080 -n $(K8S_NAMESPACE)
 
 k8s-status:
 	@echo "=== Pods ==="
