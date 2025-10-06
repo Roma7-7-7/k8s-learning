@@ -9,184 +9,226 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=gofmt
 
-# Binary names
-API_BINARY=text-api
-WORKER_BINARY=text-worker
-CONTROLLER_BINARY=text-controller
+# Service definitions
+SERVICES := api worker controller web
+GO_SERVICES := api worker controller
 STRESS_TEST_BINARY=stress-test
 
 # Build directory
 BUILD_DIR=build
 
-# Docker parameters
+# Docker/K8s parameters
 DOCKER_REGISTRY=localhost:5000
 IMAGE_TAG=latest
+K8S_NAMESPACE=k8s-learning
+K8S_TAG=dev
 
-.PHONY: all build clean test deps fmt lint help web build-stress-test run-stress-test
+# Service to operate on (default: all)
+SERVICE ?= all
+
+# Helper function to get services list
+ifeq ($(SERVICE),all)
+	SELECTED_SERVICES=$(SERVICES)
+	SELECTED_GO_SERVICES=$(GO_SERVICES)
+else
+	SELECTED_SERVICES=$(SERVICE)
+	SELECTED_GO_SERVICES=$(filter $(SERVICE),$(GO_SERVICES))
+endif
+
+.PHONY: all build clean test deps fmt lint help web
 
 # Default target
 all: fmt test build
 
-# Build all binaries
-build: build-api build-worker build-stress-test
+#
+# Go Build Targets
+#
 
-# Build individual components
-build-api:
-	mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(API_BINARY) -v ./cmd/api
+# Build Go binaries
+build:
+	@mkdir -p $(BUILD_DIR)
+	@$(foreach svc,$(SELECTED_GO_SERVICES), \
+		echo "Building $(svc)..."; \
+		$(GOBUILD) -o $(BUILD_DIR)/text-$(svc) -v ./cmd/$(svc) || exit 1; \
+	)
+	@echo "✅ Build complete"
 
-build-worker:
-	mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(WORKER_BINARY) -v ./cmd/worker
-
-build-controller:
-	mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(CONTROLLER_BINARY) -v ./cmd/controller
-
+# Build stress test tool
 build-stress-test:
-	mkdir -p $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) -o $(BUILD_DIR)/$(STRESS_TEST_BINARY) -v ./cmd/stress-test
 
-# Run tests
+#
+# Development Run Targets
+#
+
+run:
+	@if [ "$(SERVICE)" = "all" ]; then \
+		echo "❌ Error: Specify a service with SERVICE=<name>"; \
+		echo "Example: make run SERVICE=api"; \
+		exit 1; \
+	fi
+	@if [ ! -f "cmd/$(SERVICE)/main.go" ]; then \
+		echo "❌ Error: Service '$(SERVICE)' not found"; \
+		exit 1; \
+	fi
+	@echo "🚀 Running $(SERVICE)..."
+	@$(GOBUILD) -o $(BUILD_DIR)/text-$(SERVICE) ./cmd/$(SERVICE) && ./$(BUILD_DIR)/text-$(SERVICE)
+
+run-stress-test:
+	@$(GOBUILD) -o $(BUILD_DIR)/$(STRESS_TEST_BINARY) ./cmd/stress-test && \
+	./$(BUILD_DIR)/$(STRESS_TEST_BINARY) --file test-files/sample.txt --duration 30 --concurrency 2 --min-process-delay 500 --max-process-delay 2000
+
+#
+# Test Targets
+#
+
 test:
 	$(GOTEST) -v ./...
 
-# Run tests with coverage
 test-coverage:
 	$(GOTEST) -coverprofile=coverage.out -v ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
-# Format code
+#
+# Code Quality Targets
+#
+
 fmt:
 	$(GOFMT) -w .
 
-# Lint code (requires golangci-lint)
 lint:
 	@which golangci-lint > /dev/null || (echo "golangci-lint not found, install with: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin v1.54.2" && exit 1)
 	golangci-lint run
 
-# Clean build artifacts
 clean:
 	$(GOCLEAN)
 	rm -rf $(BUILD_DIR)
 	rm -f coverage.out coverage.html
 
-# Download dependencies
 deps:
 	$(GOMOD) tidy
 	$(GOMOD) download
 
-# Build Docker images
-docker-build: docker-build-api docker-build-worker docker-build-controller docker-build-ui
+#
+# Docker Targets
+#
 
-docker-build-api:
-	docker build -f docker/Dockerfile.api -t $(DOCKER_REGISTRY)/$(API_BINARY):$(IMAGE_TAG) .
+docker-build:
+	@$(foreach svc,$(SELECTED_SERVICES), \
+		echo "🐳 Building $(svc) Docker image..."; \
+		docker build -f docker/Dockerfile.$(svc) -t $(DOCKER_REGISTRY)/text-$(svc):$(IMAGE_TAG) . || exit 1; \
+	)
+	@echo "✅ Docker build complete"
 
-docker-build-worker:
-	docker build -f docker/Dockerfile.worker -t $(DOCKER_REGISTRY)/$(WORKER_BINARY):$(IMAGE_TAG) .
+docker-push:
+	@$(foreach svc,$(SELECTED_SERVICES), \
+		echo "📤 Pushing $(svc) image..."; \
+		docker push $(DOCKER_REGISTRY)/text-$(svc):$(IMAGE_TAG) || exit 1; \
+	)
+	@echo "✅ Docker push complete"
 
-docker-build-controller:
-	docker build -f docker/Dockerfile.controller -t $(DOCKER_REGISTRY)/$(CONTROLLER_BINARY):$(IMAGE_TAG) .
+#
+# Kubernetes Targets
+#
 
-docker-build-ui:
-	docker build -f docker/ui.Dockerfile -t $(DOCKER_REGISTRY)/text-ui:$(IMAGE_TAG) .
-
-# Push Docker images
-docker-push: docker-push-api docker-push-worker docker-push-controller docker-push-ui
-
-docker-push-api:
-	docker push $(DOCKER_REGISTRY)/$(API_BINARY):$(IMAGE_TAG)
-
-docker-push-worker:
-	docker push $(DOCKER_REGISTRY)/$(WORKER_BINARY):$(IMAGE_TAG)
-
-docker-push-controller:
-	docker push $(DOCKER_REGISTRY)/$(CONTROLLER_BINARY):$(IMAGE_TAG)
-
-docker-push-ui:
-	docker push $(DOCKER_REGISTRY)/text-ui:$(IMAGE_TAG)
-
-# Build Docker images for Kubernetes
 k8s-build:
-	./scripts/build-images.sh
+	@$(foreach svc,$(SELECTED_SERVICES), \
+		echo "🐳 Building $(svc) for K8s..."; \
+		docker build -f docker/Dockerfile.$(svc) -t k8s-learning/$(svc):latest -t k8s-learning/$(svc):$(K8S_TAG) . || exit 1; \
+	)
+	@echo "✅ K8s images built successfully"
 
-# Kubernetes deployment  
+k8s-load:
+	@$(foreach svc,$(SELECTED_SERVICES), \
+		echo "📤 Loading $(svc) into minikube..."; \
+		minikube image load k8s-learning/$(svc):$(K8S_TAG) || exit 1; \
+	)
+	@echo "✅ Images loaded into minikube"
+
 k8s-deploy:
-	./scripts/deploy-local.sh
+	@echo "🚀 Deploying to Kubernetes..."
+	@./scripts/deploy-local.sh
+	@echo "✅ Deployment complete"
 
 k8s-delete:
-	./scripts/cleanup.sh
+	@echo "🗑️  Deleting Kubernetes resources..."
+	@./scripts/cleanup.sh
 
-# Load images into minikube
-k8s-load-images:
-	minikube image load k8s-learning/api:dev
-	minikube image load k8s-learning/worker:dev
-	minikube image load k8s-learning/controller:dev
-	minikube image load k8s-learning/web:dev
+k8s-redeploy:
+	@if [ "$(SERVICE)" = "all" ]; then \
+		echo "❌ Error: Specify a service with SERVICE=<name>"; \
+		echo "Example: make k8s-redeploy SERVICE=controller"; \
+		exit 1; \
+	fi
+	@echo "🔄 Redeploying $(SERVICE)..."
+	@$(MAKE) build SERVICE=$(SERVICE)
+	@$(MAKE) k8s-build SERVICE=$(SERVICE)
+	@$(MAKE) k8s-load SERVICE=$(SERVICE)
+	@echo "♻️  Restarting $(SERVICE) pod..."
+	@kubectl delete pod -l app=$(SERVICE) -n $(K8S_NAMESPACE) --ignore-not-found=true
+	@echo "⏳ Waiting for $(SERVICE) to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=$(SERVICE) -n $(K8S_NAMESPACE) --timeout=60s || true
+	@echo "✅ $(SERVICE) redeployed successfully"
+	@echo ""
+	@echo "📊 Status:"
+	@kubectl get pods -l app=$(SERVICE) -n $(K8S_NAMESPACE)
+	@echo ""
+	@echo "📝 To view logs: kubectl logs -l app=$(SERVICE) -n $(K8S_NAMESPACE) -f"
 
-# Complete local K8s workflow (build, load, deploy)
-k8s-local: k8s-build k8s-load-images k8s-deploy
+# Complete local K8s workflow
+k8s-local: k8s-build k8s-load k8s-deploy
 
-# Port forward API service to localhost:8080
+# Quick rebuild and reload (without full deploy)
+k8s-reload: k8s-build k8s-load
+	@echo "✅ Images rebuilt and reloaded. Restart pods to use new images:"
+	@echo "   kubectl rollout restart deployment -n $(K8S_NAMESPACE)"
+
+#
+# Kubernetes Utilities
+#
+
 k8s-port-forward:
-	@echo "Port forwarding API service to http://localhost:8080"
-	@echo "Press Ctrl+C to stop port forwarding"
-	kubectl port-forward svc/api-service 8080:8080 -n k8s-learning
+	@echo "🔌 Port forwarding API service to http://localhost:8080"
+	@echo "Press Ctrl+C to stop"
+	@kubectl port-forward svc/api-service 8080:8080 -n $(K8S_NAMESPACE)
 
-# Show status of all resources
 k8s-status:
 	@echo "=== Pods ==="
-	kubectl get pods -n k8s-learning -o wide
+	@kubectl get pods -n $(K8S_NAMESPACE) -o wide
 	@echo ""
 	@echo "=== Services ==="
-	kubectl get svc -n k8s-learning
+	@kubectl get svc -n $(K8S_NAMESPACE)
 	@echo ""
 	@echo "=== PVCs ==="
-	kubectl get pvc -n k8s-learning
+	@kubectl get pvc -n $(K8S_NAMESPACE)
 
-# Show logs for all services
 k8s-logs:
-	@echo "=== Postgres Logs ==="
-	kubectl logs -l app=postgres -n k8s-learning --tail=20
-	@echo ""
-	@echo "=== Redis Logs ==="
-	kubectl logs -l app=redis -n k8s-learning --tail=20
-	@echo ""
-	@echo "=== Web Logs ==="
-	kubectl logs -l app=web -n k8s-learning --tail=20
-	@echo ""
-	@echo "=== API Logs ==="
-	kubectl logs -l app=api -n k8s-learning --tail=50
-	@echo ""
-	@echo "=== Worker Logs ==="
-	kubectl logs -l app=worker -n k8s-learning --tail=50
-	@echo ""
-	@echo "=== Controller Logs ==="
-	kubectl logs -l app=controller -n k8s-learning --tail=20
+	@if [ "$(SERVICE)" = "all" ]; then \
+		for svc in postgres redis $(SERVICES); do \
+			echo "=== $$svc Logs ==="; \
+			kubectl logs -l app=$$svc -n $(K8S_NAMESPACE) --tail=20 2>/dev/null || echo "No logs for $$svc"; \
+			echo ""; \
+		done; \
+	else \
+		echo "=== $(SERVICE) Logs ==="; \
+		kubectl logs -l app=$(SERVICE) -n $(K8S_NAMESPACE) --tail=50 -f; \
+	fi
 
-# Development helpers
-run-api:
-	$(GOBUILD) -o $(BUILD_DIR)/$(API_BINARY) ./cmd/api && ./$(BUILD_DIR)/$(API_BINARY)
+k8s-restart:
+	@if [ "$(SERVICE)" = "all" ]; then \
+		echo "♻️  Restarting all deployments..."; \
+		kubectl rollout restart deployment -n $(K8S_NAMESPACE); \
+	else \
+		echo "♻️  Restarting $(SERVICE)..."; \
+		kubectl rollout restart deployment/$(SERVICE) -n $(K8S_NAMESPACE); \
+	fi
+	@echo "✅ Restart initiated"
 
-run-worker:
-	$(GOBUILD) -o $(BUILD_DIR)/$(WORKER_BINARY) ./cmd/worker && ./$(BUILD_DIR)/$(WORKER_BINARY)
+#
+# Development Helpers
+#
 
-run-controller:
-	$(GOBUILD) -o $(BUILD_DIR)/$(CONTROLLER_BINARY) ./cmd/controller && ./$(BUILD_DIR)/$(CONTROLLER_BINARY)
-
-run-stress-test:
-	$(GOBUILD) -o $(BUILD_DIR)/$(STRESS_TEST_BINARY) ./cmd/stress-test && \
-	./$(BUILD_DIR)/$(STRESS_TEST_BINARY) --file test-files/sample.txt --duration 30 --concurrency 2 --min-process-delay 500 --max-process-delay 2000
-
-# Test auto-scaling functionality
-test-autoscaling:
-	./scripts/test-autoscaling.sh
-
-# Quick controller redeploy for development
-redeploy-controller:
-	./scripts/redeploy-controller.sh
-
-# Local development setup
 setup-dev:
 	@echo "Setting up local development environment..."
 	@if [ ! -f .env ]; then \
@@ -203,9 +245,8 @@ setup-dev:
 	@echo "Next steps:"
 	@echo "1. Edit .env file with your database and Redis connection details"
 	@echo "2. Start PostgreSQL and Redis services"
-	@echo "3. Run: make run-api"
+	@echo "3. Run: make run SERVICE=api"
 
-# Run web UI development server
 web:
 	@echo "Starting web UI development server..."
 	@echo "Access the web UI at: http://localhost:3000"
@@ -213,36 +254,66 @@ web:
 	@echo "Press Ctrl+C to stop the server"
 	@cd web && python3 -m http.server 3000
 
+test-autoscaling:
+	@./scripts/test-autoscaling.sh
+
+#
 # Help
+#
+
 help:
-	@echo "Available targets:"
-	@echo "  all              - Format, test, and build all components"
-	@echo "  build            - Build all binaries"
-	@echo "  build-api        - Build API service"
-	@echo "  build-worker     - Build worker service"
-	@echo "  build-controller - Build controller service"
-	@echo "  build-stress-test - Build stress test tool"
-	@echo "  test             - Run all tests"
-	@echo "  test-coverage    - Run tests with coverage report"
-	@echo "  fmt              - Format Go code"
-	@echo "  lint             - Run linter (requires golangci-lint)"
-	@echo "  clean            - Clean build artifacts"
-	@echo "  deps             - Download and tidy dependencies"
-	@echo "  docker-build     - Build all Docker images"
-	@echo "  docker-push      - Push all Docker images"
-	@echo "  k8s-build        - Build Docker images for Kubernetes"
-	@echo "  k8s-deploy       - Deploy to Kubernetes using kustomize"
-	@echo "  k8s-delete       - Delete from Kubernetes"
-	@echo "  k8s-load-images  - Load images into minikube"
-	@echo "  k8s-local        - Complete local K8s workflow (build, load, deploy)"
-	@echo "  k8s-port-forward - Port forward API service to localhost:8080"
-	@echo "  k8s-status       - Show status of all K8s resources"
-	@echo "  k8s-logs         - Show logs for all services"
-	@echo "  run-api          - Build and run API service"
-	@echo "  run-worker       - Build and run worker service"
-	@echo "  run-controller   - Build and run controller service"
-	@echo "  run-stress-test  - Build and run stress test with default parameters"
-	@echo "  setup-dev        - Setup local development environment (.env file and directories)"
-	@echo "  web              - Start web UI development server on http://localhost:3000"
-	@echo "  test-autoscaling - Test queue-based auto-scaling demonstration"
-	@echo "  help             - Show this help message"
+	@echo "Text Processing Queue - Build & Deploy System"
+	@echo ""
+	@echo "Usage: make TARGET [SERVICE=<service>]"
+	@echo ""
+	@echo "Services: $(SERVICES)"
+	@echo "  - Specify SERVICE=<name> to operate on a single service"
+	@echo "  - Specify SERVICE=\"svc1 svc2\" for multiple services"
+	@echo "  - Omit SERVICE or use SERVICE=all for all services"
+	@echo ""
+	@echo "Build Targets:"
+	@echo "  build              Build Go services [SERVICE=all]"
+	@echo "  build-stress-test  Build stress testing tool"
+	@echo "  docker-build       Build Docker images [SERVICE=all]"
+	@echo "  docker-push        Push Docker images [SERVICE=all]"
+	@echo "  k8s-build          Build images for K8s [SERVICE=all]"
+	@echo ""
+	@echo "Development Targets:"
+	@echo "  run                Build and run a service [SERVICE required]"
+	@echo "  run-stress-test    Run stress test with default params"
+	@echo "  setup-dev          Setup local dev environment"
+	@echo "  web                Start web UI dev server"
+	@echo ""
+	@echo "Kubernetes Targets:"
+	@echo "  k8s-local          Complete workflow: build, load, deploy [SERVICE=all]"
+	@echo "  k8s-build          Build K8s images [SERVICE=all]"
+	@echo "  k8s-load           Load images into minikube [SERVICE=all]"
+	@echo "  k8s-reload         Quick rebuild & reload [SERVICE=all]"
+	@echo "  k8s-deploy         Deploy to K8s (full deployment)"
+	@echo "  k8s-redeploy       Fast redeploy single service [SERVICE required]"
+	@echo "  k8s-restart        Restart K8s deployments [SERVICE=all]"
+	@echo "  k8s-delete         Delete all K8s resources"
+	@echo ""
+	@echo "Kubernetes Utilities:"
+	@echo "  k8s-status         Show K8s resource status"
+	@echo "  k8s-logs           Show logs [SERVICE=all or specific]"
+	@echo "  k8s-port-forward   Port forward API to localhost:8080"
+	@echo ""
+	@echo "Test Targets:"
+	@echo "  test               Run unit tests"
+	@echo "  test-coverage      Run tests with coverage"
+	@echo "  test-autoscaling   Test auto-scaling demo"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  fmt                Format Go code"
+	@echo "  lint               Run linter"
+	@echo "  clean              Clean build artifacts"
+	@echo "  deps               Download dependencies"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make build                         # Build all services"
+	@echo "  make build SERVICE=api             # Build only API"
+	@echo "  make run SERVICE=controller        # Run controller locally"
+	@echo "  make k8s-redeploy SERVICE=worker   # Quick worker redeploy"
+	@echo "  make k8s-build SERVICE=\"api worker\"  # Build specific services"
+	@echo "  make k8s-logs SERVICE=controller   # Follow controller logs"

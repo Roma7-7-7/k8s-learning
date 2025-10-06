@@ -28,6 +28,8 @@
 - Avoid external dependencies for simple tasks
 - Use github.com/kelseyhightower/envconfig for environment variable configuration
 - Use github.com/golang-migrate/migrate for database migrations
+- Use sigs.k8s.io/controller-runtime for Kubernetes controllers
+- Use github.com/prometheus/client_golang for metrics exposition
 
 ### Testing
 - Write table-driven tests when testing multiple scenarios
@@ -100,6 +102,17 @@
 - Use multi-stage builds for Go applications
 - Don't run containers as root user
 - Group related resources in the same namespace
+
+### Controller Development
+- Use controller-runtime for building Kubernetes controllers
+- Implement periodic reconciliation with time.Ticker for queue-based controllers
+- Always use context.Context for cancellation support
+- Use Patch instead of Update for deployment modifications to avoid conflicts
+- Implement graceful shutdown handling for controllers
+- Expose metrics via Prometheus for monitoring
+- Use slog for structured logging with appropriate log levels
+- Set proper RBAC permissions (ServiceAccount, Role, RoleBinding)
+- Implement health and readiness probes for controller pods
 
 ### Services & Networking
 - Use Services for pod-to-pod communication
@@ -235,42 +248,84 @@ After completing each significant task or implementation milestone:
    - Document any new dependencies or architectural decisions
    - Add to the Code Review Checklist if new patterns are established
 
-2. **Update README.md** (if necessary):
-   - Update build status or completion phases
-   - Add new API endpoints or features to documentation
-   - Update deployment instructions if changed
-   - Modify architecture diagrams if significant changes made
+2. **Update STATUS.md**:
+   - Move items from Pending to Completed as features are implemented
+   - Add new pending items as they are identified
+   - Update feature descriptions with implementation details
 
-3. **Commit Changes**:
+3. **Update README.md** (if necessary):
+   - Update quick start instructions if setup changes
+   - Add new make commands to Development Commands section
+   - Keep it minimal - detailed docs belong in STATUS.md or separate docs
+
+4. **Commit Changes**:
    - Use descriptive commit messages following conventional commits
    - Include both implementation and documentation updates in commits
-   - Update any relevant phase completion status
 
 ## Development Commands
+
+The build system uses a **parameterized approach** with `SERVICE=<name>` for flexible operations:
 
 ### Core Development Workflow
 ```bash
 make fmt          # Format Go code
-make lint         # Run golangci-lint for code quality checks  
+make lint         # Run golangci-lint for code quality checks
 make test         # Run all tests
-make build        # Build all binaries
+make build        # Build all Go services
 make all          # Format, lint, test, and build
 ```
 
-### Build Commands
+### Parameterized Build System
+
+**Services:** `api`, `worker`, `controller`, `web`
+
+All major commands support `SERVICE` parameter:
+- Omit `SERVICE` or use `SERVICE=all` for all services
+- Specify `SERVICE=<name>` for single service
+- Specify `SERVICE="svc1 svc2"` for multiple services
+
 ```bash
-make build-api           # Build API service
-make build-worker        # Build worker service  
-make build-controller    # Build controller service
-make build-stress-test   # Build stress testing tool
+# Build examples
+make build                      # Build all services
+make build SERVICE=api          # Build only API
+make build SERVICE="api worker" # Build multiple services
+
+# Run locally (requires SERVICE)
+make run SERVICE=api            # Build and run API
+make run SERVICE=controller     # Build and run controller
+
+# Docker build
+make docker-build               # Build all Docker images
+make docker-build SERVICE=web   # Build only web image
+
+# Kubernetes build
+make k8s-build                  # Build all K8s images
+make k8s-build SERVICE=worker   # Build only worker image
 ```
 
-### Run Commands  
+### Kubernetes Workflow Commands
+
 ```bash
-make run-api           # Build and run API service
-make run-worker        # Build and run worker service
-make run-controller    # Build and run controller service
-make run-stress-test   # Build and run stress test with default parameters
+# Full deployment (all services)
+make k8s-local         # Build, load, deploy all services
+make k8s-build         # Build Docker images
+make k8s-load          # Load images into minikube
+make k8s-deploy        # Deploy to K8s
+
+# Fast single-service redeploy (replaces old redeploy-controller script)
+make k8s-redeploy SERVICE=controller  # Rebuild + redeploy controller
+make k8s-redeploy SERVICE=api         # Rebuild + redeploy API
+
+# Quick reload without full deploy
+make k8s-reload                       # Rebuild + reload all images
+make k8s-reload SERVICE=worker        # Rebuild + reload worker only
+
+# Utilities
+make k8s-status                       # Show resource status
+make k8s-logs                         # Show all service logs
+make k8s-logs SERVICE=controller      # Follow controller logs (live)
+make k8s-restart                      # Restart all deployments
+make k8s-restart SERVICE=api          # Restart API deployment only
 ```
 
 ### Testing Commands
@@ -278,13 +333,58 @@ make run-stress-test   # Build and run stress test with default parameters
 make test              # Run unit tests
 make test-coverage     # Run tests with coverage report
 make run-stress-test   # Run load/stress testing
+make test-autoscaling  # Test queue-based auto-scaling demonstration
 ```
+
+### Adding New Services
+
+When adding a new service:
+1. Add to `SERVICES` list in Makefile (top of file)
+2. Add to `GO_SERVICES` if it's a Go service
+3. Create `cmd/<service>/main.go`
+4. Create `docker/Dockerfile.<service>`
+5. No other Makefile changes needed - parameterized targets handle it automatically
 
 ### Code Quality
 - Always run `make lint` before committing changes
 - Use `make fmt` to format code according to Go standards
 - Run `make test-coverage` to ensure adequate test coverage
 - The project uses golangci-lint with comprehensive rules defined in `.golangci.yml`
+
+## Auto-Scaling Architecture
+
+The project implements queue-based auto-scaling using a custom Kubernetes controller:
+
+### Controller Design
+- Monitors Redis queue depth (main + priority queues) every 30 seconds
+- Scales worker deployment up/down based on queue thresholds
+- Uses Kubernetes client-go and controller-runtime libraries
+- Exposes Prometheus metrics for monitoring
+
+### Scaling Logic
+- **Scale up**: When queue depth > 20, add up to 2 workers (max 10 total)
+- **Scale down**: When queue depth < 5, remove 1 worker (min 1 total)
+- **Jobs per worker**: Estimated capacity of 10 jobs per worker
+- Uses Patch operations to avoid resource version conflicts
+
+### Configuration
+- `RECONCILE_INTERVAL`: Controller reconciliation interval (default: 30s)
+- `METRICS_COLLECTION_INTERVAL`: Metrics update interval (default: 15s)
+- Environment variables: `REDIS_HOST`, `REDIS_PORT`, `LOG_LEVEL`
+
+### Testing Auto-Scaling
+```bash
+# Run auto-scaling demonstration
+make test-autoscaling
+
+# Monitor worker scaling in real-time
+kubectl get deployment worker -n k8s-learning -w
+
+# Generate load to trigger scaling
+make run-stress-test
+```
+
+See `docs/AUTO_SCALING.md` for comprehensive architecture details.
 
 ## Code Review Checklist
 When reviewing or suggesting changes, ensure:
@@ -297,6 +397,8 @@ When reviewing or suggesting changes, ensure:
 - [ ] Appropriate logging level
 - [ ] Test coverage for new functionality
 - [ ] K8s resources have proper labels and resource limits
+- [ ] K8s controllers use Patch instead of Update for modifications
+- [ ] Controllers implement graceful shutdown
 - [ ] Web UI is accessible and responsive
 - [ ] No unnecessary JavaScript dependencies
-- [ ] Documentation updated (CLAUDE.md and README.md if needed)
+- [ ] Documentation updated (STATUS.md for features, CLAUDE.md for standards, README.md for setup changes)
