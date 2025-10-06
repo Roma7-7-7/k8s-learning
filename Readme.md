@@ -101,8 +101,9 @@ make test-autoscaling   # Auto-scaling demo
 
 # Monitoring
 kubectl apply -f deployments/base/monitoring/monitoring.yaml  # Deploy
-kubectl port-forward -n monitoring svc/grafana 3000:3000     # Access Grafana
-kubectl port-forward -n monitoring svc/prometheus 9090:9090  # Access Prometheus
+make grafana            # Access Grafana (http://localhost:3000)
+make prometheus         # Access Prometheus (http://localhost:9090)
+make monitoring-status  # Check monitoring stack status
 ```
 
 **Examples:**

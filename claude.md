@@ -341,16 +341,17 @@ make test-autoscaling  # Test queue-based auto-scaling demonstration
 # Deploy monitoring stack
 kubectl apply -f deployments/base/monitoring/monitoring.yaml
 
-# Access Grafana (NodePort on 30300)
-minikube service grafana -n monitoring --url
-# Or use port-forward: kubectl port-forward -n monitoring svc/grafana 3000:3000
+# Access Grafana (easiest method)
+make grafana
+# Opens at http://localhost:3000
 # Default credentials: admin/admin
 
 # Access Prometheus
-kubectl port-forward -n monitoring svc/prometheus 9090:9090
+make prometheus
+# Opens at http://localhost:9090
 
-# Check monitoring pods
-kubectl get pods -n monitoring
+# Check monitoring status
+make monitoring-status
 
 # View API metrics directly
 kubectl port-forward -n k8s-learning svc/api 8080:8080

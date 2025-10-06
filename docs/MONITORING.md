@@ -27,10 +27,13 @@ kubectl get pods -n monitoring
 Grafana is exposed via NodePort on port 30300:
 
 ```bash
-# Get Grafana URL (minikube)
+# Easiest method - use Makefile
+make grafana
+
+# Alternative: Get Grafana URL (minikube)
 minikube service grafana -n monitoring --url
 
-# Or use port-forward
+# Alternative: Manual port-forward
 kubectl port-forward -n monitoring svc/grafana 3000:3000
 ```
 
@@ -45,11 +48,27 @@ Access at: http://localhost:3000
 Prometheus is accessible via ClusterIP:
 
 ```bash
-# Port-forward to access Prometheus UI
+# Easiest method - use Makefile
+make prometheus
+
+# Alternative: Manual port-forward
 kubectl port-forward -n monitoring svc/prometheus 9090:9090
 ```
 
 Access at: http://localhost:9090
+
+### Monitoring Status
+
+Check the status of the monitoring stack:
+
+```bash
+# Using Makefile
+make monitoring-status
+
+# Or manually
+kubectl get pods -n monitoring
+kubectl get svc -n monitoring
+```
 
 ## Available Metrics
 
