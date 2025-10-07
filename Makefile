@@ -227,17 +227,19 @@ k8s-forward:
 	@echo ""
 	@echo "Services will be available at:"
 	@echo "  • API:        http://localhost:8080"
+	@echo "  • Worker:     http://localhost:8181 (metrics, health)"
+	@echo "  • Controller: http://localhost:8282 (metrics, health)"
 	@echo "  • Grafana:    http://localhost:3000 (admin/admin)"
 	@echo "  • Prometheus: http://localhost:9090"
-	@echo "  • Controller: http://localhost:8081/metrics"
 	@echo ""
 	@echo "Press Ctrl+C to stop all port forwards"
 	@echo ""
 	@trap 'kill 0' EXIT; \
 	kubectl port-forward -n $(K8S_NAMESPACE) svc/api 8080:8080 & \
+	kubectl port-forward -n $(K8S_NAMESPACE) deployment/worker 8181:8080 & \
+	kubectl port-forward -n $(K8S_NAMESPACE) svc/controller-metrics-service 8282:8080 & \
 	kubectl port-forward -n monitoring svc/grafana 3000:3000 & \
 	kubectl port-forward -n monitoring svc/prometheus 9090:9090 & \
-	kubectl port-forward -n $(K8S_NAMESPACE) svc/controller-metrics-service 8081:8081 & \
 	wait
 
 k8s-status:

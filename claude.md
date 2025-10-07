@@ -114,6 +114,54 @@
 - Set proper RBAC permissions (ServiceAccount, Role, RoleBinding)
 - Implement health and readiness probes for controller pods
 
+### Health Endpoints
+All services must expose standardized health endpoints following Kubernetes conventions:
+
+**Required Endpoints:**
+- `/livez` - Liveness probe: Basic check that the process is running and not deadlocked
+  - Returns HTTP 200 OK if alive
+  - Simple check, no external dependencies
+  - Used by Kubernetes to restart unhealthy pods
+- `/readyz` - Readiness probe: Check if service can accept traffic
+  - Returns HTTP 200 OK if ready, 503 Service Unavailable if not ready
+  - Must check all critical dependencies (database, Redis, etc.)
+  - Used by Kubernetes to route traffic only to ready pods
+- `/healthz` - General health check (typically an alias for `/livez`)
+  - Follows Kubernetes ecosystem naming convention
+
+**Implementation:**
+- All services use **port 8080** for all endpoints (metrics, health, API)
+- Single HTTP server per service serves all endpoints (metrics, health, business logic)
+- Expose health endpoints on the same port as metrics endpoint
+- Use context-aware health checks with reasonable timeouts
+- Log health check failures for debugging
+- Keep liveness checks simple to avoid false positives
+- Make readiness checks comprehensive to ensure service quality
+
+**Deployment Configuration:**
+```yaml
+ports:
+- name: http
+  containerPort: 8080
+  protocol: TCP
+livenessProbe:
+  httpGet:
+    path: /livez
+    port: 8080
+  initialDelaySeconds: 15-30
+  periodSeconds: 10-20
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 5-10
+```
+
+**Backwards Compatibility:**
+- For existing services, maintain old endpoints (`/health`, `/ready`) as aliases
+- Gradually migrate to Kubernetes-standard endpoints
+
 ### Services & Networking
 - Use Services for pod-to-pod communication
 - Prefer ClusterIP for internal services
@@ -360,10 +408,11 @@ kubectl apply -f deployments/base/monitoring/monitoring.yaml
 # Port forward all services (recommended)
 make k8s-forward
 # This forwards:
-#   - API:        http://localhost:8080
+#   - API:        http://localhost:8080 (metrics, health)
+#   - Worker:     http://localhost:8181 (metrics, health)
+#   - Controller: http://localhost:8282 (metrics, health)
 #   - Grafana:    http://localhost:3000 (admin/admin)
 #   - Prometheus: http://localhost:9090
-#   - Controller: http://localhost:8081/metrics
 
 # Check monitoring status
 make monitoring-status
@@ -470,6 +519,9 @@ When reviewing or suggesting changes, ensure:
 - [ ] K8s resources have proper labels and resource limits
 - [ ] K8s controllers use Patch instead of Update for modifications
 - [ ] Controllers implement graceful shutdown
+- [ ] Health endpoints (/livez, /readyz, /healthz) are implemented for all services
+- [ ] Liveness and readiness probes are configured in deployment YAMLs
+- [ ] Readiness checks verify all critical dependencies (DB, Redis, etc.)
 - [ ] Web UI is accessible and responsive
 - [ ] No unnecessary JavaScript dependencies
 - [ ] Documentation updated (STATUS.md for features, CLAUDE.md for standards, README.md for setup changes)

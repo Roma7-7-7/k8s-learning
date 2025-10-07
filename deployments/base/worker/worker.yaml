@@ -18,7 +18,7 @@ spec:
         component: processor
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9090"
+        prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
     spec:
       containers:
@@ -26,8 +26,8 @@ spec:
         image: k8s-learning/worker:latest
         imagePullPolicy: Never
         ports:
-        - name: metrics
-          containerPort: 9090
+        - name: http
+          containerPort: 8080
           protocol: TCP
         env:
         - name: WORKER_ID
@@ -35,7 +35,7 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         - name: METRICS_PORT
-          value: "9090"
+          value: "8080"
         envFrom:
         - configMapRef:
             name: app-config
@@ -54,6 +54,18 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
       volumes:
       - name: uploads-storage
         persistentVolumeClaim:

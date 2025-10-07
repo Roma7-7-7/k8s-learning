@@ -8,13 +8,9 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - name: metrics
+  - name: http
     port: 8080
-    targetPort: metrics
-    protocol: TCP
-  - name: health
-    port: 8081
-    targetPort: health
+    targetPort: 8080
     protocol: TCP
   selector:
     app: controller
