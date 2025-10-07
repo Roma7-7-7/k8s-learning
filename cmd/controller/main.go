@@ -39,7 +39,7 @@ func main() {
 	defer cancel()
 
 	// Parse flags and setup logger
-	metricsAddr, probeAddr, enableLeaderElection := parseFlags()
+	serverAddr, enableLeaderElection := parseFlags()
 
 	// Load configuration
 	cfg := loadConfig()
@@ -48,8 +48,7 @@ func main() {
 	log := setupLogger(cfg.Logging)
 	log.InfoContext(ctx, "starting text processing controller",
 		"version", "v1alpha1",
-		"metrics_addr", metricsAddr,
-		"health_addr", probeAddr,
+		"server_addr", serverAddr,
 		"leader_election", enableLeaderElection,
 		"reconcile_interval", cfg.ReconcileInterval)
 
@@ -62,24 +61,22 @@ func main() {
 	metricsCollector := metrics.NewMetricsCollector(redisQueue, log)
 	go metricsCollector.StartPeriodicCollection(ctx, cfg.MetricsCollectionInterval)
 
-	// Start servers
-	metricsServer := startMetricsServer(ctx, metricsAddr, log)
-	healthServer := startHealthServer(ctx, probeAddr, log, redisQueue)
+	// Start server (metrics + health endpoints)
+	server := startServer(ctx, serverAddr, log, redisQueue)
 
 	// Setup graceful shutdown
-	setupGracefulShutdown(ctx, log, metricsServer, healthServer)
+	setupGracefulShutdown(ctx, log, server)
 
 	// Start worker scaler (blocking)
 	setupLog.Info("starting worker scaler")
 	workerScaler.StartPeriodicScaling(ctx)
 }
 
-func parseFlags() (string, string, bool) {
-	var metricsAddr, probeAddr string
+func parseFlags() (string, bool) {
+	var serverAddr string
 	var enableLeaderElection bool
 
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.StringVar(&serverAddr, "bind-address", ":8080", "The address the server endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager.")
 
@@ -88,7 +85,7 @@ func parseFlags() (string, string, bool) {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-	return metricsAddr, probeAddr, enableLeaderElection
+	return serverAddr, enableLeaderElection
 }
 
 func loadConfig() *config.Controller {
@@ -129,38 +126,26 @@ func createWorkerScaler(k8sClient client.Client, log *slog.Logger, redisQueue *q
 	}
 }
 
-func startMetricsServer(ctx context.Context, addr string, log *slog.Logger) *http.Server {
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           promhttp.Handler(),
-		ReadHeaderTimeout: httpReadHeaderTimeout,
-	}
-	go func() {
-		log.InfoContext(ctx, "starting metrics server", "addr", addr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			setupLog.Error(err, "metrics server failed")
-		}
-	}()
-	return server
-}
+func startServer(ctx context.Context, addr string, log *slog.Logger, redisQueue *queue.RedisQueue) *http.Server {
+	mux := http.NewServeMux()
 
-func startHealthServer(ctx context.Context, addr string, log *slog.Logger, redisQueue *queue.RedisQueue) *http.Server {
-	healthMux := http.NewServeMux()
+	// Prometheus metrics
+	mux.Handle("/metrics", promhttp.Handler())
 
 	// Liveness check - basic check that process is running
-	healthMux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Alias for livez
-	healthMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Readiness check - verify Redis connectivity
-	healthMux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := redisQueue.HealthCheck(r.Context()); err != nil {
 			log.ErrorContext(r.Context(), "redis health check failed", "error", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -173,13 +158,13 @@ func startHealthServer(ctx context.Context, addr string, log *slog.Logger, redis
 
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           healthMux,
+		Handler:           mux,
 		ReadHeaderTimeout: httpReadHeaderTimeout,
 	}
 	go func() {
-		log.InfoContext(ctx, "starting health server", "addr", addr)
+		log.InfoContext(ctx, "starting server", "addr", addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			setupLog.Error(err, "health server failed")
+			setupLog.Error(err, "server failed")
 		}
 	}()
 	return server
@@ -190,19 +175,16 @@ const (
 	httpReadHeaderTimeout = 5 * time.Second
 )
 
-func setupGracefulShutdown(ctx context.Context, log *slog.Logger, metricsServer, healthServer *http.Server) {
+func setupGracefulShutdown(ctx context.Context, log *slog.Logger, server *http.Server) {
 	go func() {
 		<-ctx.Done()
-		log.InfoContext(context.Background(), "shutting down servers")
+		log.InfoContext(context.Background(), "shutting down server")
 
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
-		if err := metricsServer.Shutdown(shutdownCtx); err != nil {
-			setupLog.Error(err, "metrics server shutdown failed")
-		}
-		if err := healthServer.Shutdown(shutdownCtx); err != nil {
-			setupLog.Error(err, "health server shutdown failed")
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			setupLog.Error(err, "server shutdown failed")
 		}
 	}()
 }

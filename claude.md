@@ -130,7 +130,9 @@ All services must expose standardized health endpoints following Kubernetes conv
   - Follows Kubernetes ecosystem naming convention
 
 **Implementation:**
-- Expose health endpoints on the same port as metrics or main HTTP server
+- All services use **port 8080** for all endpoints (metrics, health, API)
+- Single HTTP server per service serves all endpoints (metrics, health, business logic)
+- Expose health endpoints on the same port as metrics endpoint
 - Use context-aware health checks with reasonable timeouts
 - Log health check failures for debugging
 - Keep liveness checks simple to avoid false positives
@@ -138,16 +140,20 @@ All services must expose standardized health endpoints following Kubernetes conv
 
 **Deployment Configuration:**
 ```yaml
+ports:
+- name: http
+  containerPort: 8080
+  protocol: TCP
 livenessProbe:
   httpGet:
     path: /livez
-    port: <service-port>
+    port: 8080
   initialDelaySeconds: 15-30
   periodSeconds: 10-20
 readinessProbe:
   httpGet:
     path: /readyz
-    port: <service-port>
+    port: 8080
   initialDelaySeconds: 5
   periodSeconds: 5-10
 ```
@@ -402,10 +408,11 @@ kubectl apply -f deployments/base/monitoring/monitoring.yaml
 # Port forward all services (recommended)
 make k8s-forward
 # This forwards:
-#   - API:        http://localhost:8080
+#   - API:        http://localhost:8080 (metrics, health)
+#   - Worker:     http://localhost:8181 (metrics, health)
+#   - Controller: http://localhost:8282 (metrics, health)
 #   - Grafana:    http://localhost:3000 (admin/admin)
 #   - Prometheus: http://localhost:9090
-#   - Controller: http://localhost:8081/metrics
 
 # Check monitoring status
 make monitoring-status

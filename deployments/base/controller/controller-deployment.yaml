@@ -33,21 +33,18 @@ spec:
           value: "15s"
         ports:
         - containerPort: 8080
-          name: metrics
-          protocol: TCP
-        - containerPort: 8081
-          name: health
+          name: http
           protocol: TCP
         livenessProbe:
           httpGet:
             path: /livez
-            port: health
+            port: 8080
           initialDelaySeconds: 15
           periodSeconds: 20
         readinessProbe:
           httpGet:
             path: /readyz
-            port: health
+            port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:

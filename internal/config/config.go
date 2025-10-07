@@ -29,7 +29,7 @@ type Worker struct {
 	ConcurrentJobs       int           `envconfig:"CONCURRENT_JOBS" default:"5"`
 	HeartbeatInterval    time.Duration `envconfig:"HEARTBEAT_INTERVAL" default:"30s"`
 	PollInterval         time.Duration `envconfig:"POLL_INTERVAL" default:"5s"`
-	MetricsPort          int           `envconfig:"METRICS_PORT" default:"9090"`
+	MetricsPort          int           `envconfig:"METRICS_PORT" default:"8080"`
 	QueueMetricsInterval time.Duration `envconfig:"QUEUE_METRICS_INTERVAL" default:"15s"`
 }
 
