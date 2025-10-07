@@ -23,6 +23,16 @@ IMAGE_TAG=latest
 K8S_NAMESPACE=k8s-learning
 K8S_TAG=dev
 
+# Generate unique tag for K8s images (git SHA + timestamp)
+# Use K8S_TAG_OVERRIDE if set, otherwise generate new tag
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+TIMESTAMP := $(shell date +%s)
+ifdef K8S_TAG_OVERRIDE
+	UNIQUE_TAG := $(K8S_TAG_OVERRIDE)
+else
+	UNIQUE_TAG := $(GIT_SHA)-$(TIMESTAMP)
+endif
+
 # Service to operate on (default: all)
 SERVICE ?= all
 
@@ -35,7 +45,7 @@ else
 	SELECTED_GO_SERVICES=$(filter $(SERVICE),$(GO_SERVICES))
 endif
 
-.PHONY: all build clean test deps fmt lint help web grafana prometheus monitoring-status
+.PHONY: all build clean test deps fmt lint help web monitoring-status k8s-forward
 
 # Default target
 all: fmt test build
@@ -134,26 +144,40 @@ docker-push:
 
 k8s-build:
 	@$(foreach svc,$(SELECTED_SERVICES), \
-		echo "🐳 Building $(svc) for K8s..."; \
-		docker build -f docker/Dockerfile.$(svc) -t k8s-learning/$(svc):latest -t k8s-learning/$(svc):$(K8S_TAG) . || exit 1; \
+		echo "🐳 Building $(svc) for K8s (tag: $(UNIQUE_TAG))..."; \
+		docker build -f docker/Dockerfile.$(svc) -t k8s-learning/$(svc):$(UNIQUE_TAG) . || exit 1; \
 	)
-	@echo "✅ K8s images built successfully"
+	@echo "✅ K8s images built successfully with tag: $(UNIQUE_TAG)"
 
 k8s-load:
 	@$(foreach svc,$(SELECTED_SERVICES), \
-		echo "📤 Loading $(svc) into minikube..."; \
-		minikube image load k8s-learning/$(svc):$(K8S_TAG) || exit 1; \
+		echo "📤 Loading $(svc):$(UNIQUE_TAG) into minikube..."; \
+		minikube image load k8s-learning/$(svc):$(UNIQUE_TAG) || exit 1; \
 	)
 	@echo "✅ Images loaded into minikube"
 
 k8s-deploy:
-	@echo "🚀 Deploying to Kubernetes..."
-	@./scripts/deploy-local.sh
+	@echo "🚀 Deploying to Kubernetes with tag $(UNIQUE_TAG)..."
+	@./scripts/deploy-local.sh $(UNIQUE_TAG)
 	@echo "✅ Deployment complete"
 
-k8s-delete:
-	@echo "🗑️  Deleting Kubernetes resources..."
-	@./scripts/cleanup.sh
+k8s-clean:
+	@echo "🧹 Cleaning all Kubernetes resources..."
+	@echo "⚠️  This will delete:"
+	@echo "   - All deployments, services, PVCs in k8s-learning namespace"
+	@echo "   - Monitoring stack in monitoring namespace"
+	@echo "   - All loaded images from minikube"
+	@echo ""
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ] || exit 1
+	@echo ""
+	@echo "🗑️  Deleting k8s-learning namespace resources..."
+	@kubectl delete namespace k8s-learning --ignore-not-found=true --timeout=60s
+	@echo "🗑️  Deleting monitoring namespace resources..."
+	@kubectl delete namespace monitoring --ignore-not-found=true --timeout=60s
+	@echo "🧹 Cleaning minikube images..."
+	@echo "Finding and removing all k8s-learning images from minikube..."
+	@minikube ssh -- 'docker images --format "{{.Repository}}:{{.Tag}}" | grep "^k8s-learning/" | xargs -r docker rmi -f' 2>/dev/null || true
+	@echo "✅ Cleanup complete"
 
 k8s-redeploy:
 	@if [ "$(SERVICE)" = "all" ]; then \
@@ -161,15 +185,15 @@ k8s-redeploy:
 		echo "Example: make k8s-redeploy SERVICE=controller"; \
 		exit 1; \
 	fi
-	@echo "🔄 Redeploying $(SERVICE)..."
+	@echo "🔄 Redeploying $(SERVICE) with tag $(UNIQUE_TAG)..."
 	@$(MAKE) build SERVICE=$(SERVICE)
-	@$(MAKE) k8s-build SERVICE=$(SERVICE)
-	@$(MAKE) k8s-load SERVICE=$(SERVICE)
-	@echo "♻️  Restarting $(SERVICE) pod..."
-	@kubectl delete pod -l app=$(SERVICE) -n $(K8S_NAMESPACE) --ignore-not-found=true
-	@echo "⏳ Waiting for $(SERVICE) to be ready..."
-	@kubectl wait --for=condition=ready pod -l app=$(SERVICE) -n $(K8S_NAMESPACE) --timeout=60s || true
-	@echo "✅ $(SERVICE) redeployed successfully"
+	@$(MAKE) k8s-build SERVICE=$(SERVICE) K8S_TAG_OVERRIDE=$(UNIQUE_TAG)
+	@$(MAKE) k8s-load SERVICE=$(SERVICE) K8S_TAG_OVERRIDE=$(UNIQUE_TAG)
+	@echo "🔄 Updating deployment to use new image..."
+	@kubectl set image deployment/$(SERVICE) $(SERVICE)=k8s-learning/$(SERVICE):$(UNIQUE_TAG) -n $(K8S_NAMESPACE)
+	@echo "⏳ Waiting for rollout to complete..."
+	@kubectl rollout status deployment/$(SERVICE) -n $(K8S_NAMESPACE) --timeout=60s
+	@echo "✅ $(SERVICE) redeployed successfully with tag $(UNIQUE_TAG)"
 	@echo ""
 	@echo "📊 Status:"
 	@kubectl get pods -l app=$(SERVICE) -n $(K8S_NAMESPACE)
@@ -177,10 +201,20 @@ k8s-redeploy:
 	@echo "📝 To view logs: kubectl logs -l app=$(SERVICE) -n $(K8S_NAMESPACE) -f"
 
 # Complete local K8s workflow
-k8s-local: k8s-build k8s-load k8s-deploy
+k8s-local:
+	@echo "🚀 Starting complete K8s workflow with tag $(UNIQUE_TAG)..."
+	@$(MAKE) k8s-build K8S_TAG_OVERRIDE=$(UNIQUE_TAG)
+	@$(MAKE) k8s-load K8S_TAG_OVERRIDE=$(UNIQUE_TAG)
+	@$(MAKE) k8s-deploy K8S_TAG_OVERRIDE=$(UNIQUE_TAG)
+	@echo "📊 Deploying monitoring stack..."
+	@kubectl apply -f deployments/base/monitoring/monitoring.yaml
+	@echo "✅ Monitoring stack deployed"
 
 # Quick rebuild and reload (without full deploy)
-k8s-reload: k8s-build k8s-load
+k8s-reload:
+	@echo "🔄 Rebuilding and reloading with tag $(UNIQUE_TAG)..."
+	@$(MAKE) k8s-build K8S_TAG_OVERRIDE=$(UNIQUE_TAG)
+	@$(MAKE) k8s-load K8S_TAG_OVERRIDE=$(UNIQUE_TAG)
 	@echo "✅ Images rebuilt and reloaded. Restart pods to use new images:"
 	@echo "   kubectl rollout restart deployment -n $(K8S_NAMESPACE)"
 
@@ -188,10 +222,23 @@ k8s-reload: k8s-build k8s-load
 # Kubernetes Utilities
 #
 
-k8s-port-forward:
-	@echo "🔌 Port forwarding API service to http://localhost:8080"
-	@echo "Press Ctrl+C to stop"
-	@kubectl port-forward svc/api 8080:8080 -n $(K8S_NAMESPACE)
+k8s-forward:
+	@echo "🔌 Setting up port forwarding for all services..."
+	@echo ""
+	@echo "Services will be available at:"
+	@echo "  • API:        http://localhost:8080"
+	@echo "  • Grafana:    http://localhost:3000 (admin/admin)"
+	@echo "  • Prometheus: http://localhost:9090"
+	@echo "  • Controller: http://localhost:8081/metrics"
+	@echo ""
+	@echo "Press Ctrl+C to stop all port forwards"
+	@echo ""
+	@trap 'kill 0' EXIT; \
+	kubectl port-forward -n $(K8S_NAMESPACE) svc/api 8080:8080 & \
+	kubectl port-forward -n monitoring svc/grafana 3000:3000 & \
+	kubectl port-forward -n monitoring svc/prometheus 9090:9090 & \
+	kubectl port-forward -n $(K8S_NAMESPACE) svc/controller-metrics-service 8081:8081 & \
+	wait
 
 k8s-status:
 	@echo "=== Pods ==="
@@ -229,17 +276,6 @@ k8s-restart:
 # Monitoring
 #
 
-grafana:
-	@echo "🔌 Port forwarding Grafana to http://localhost:3000"
-	@echo "📊 Default credentials: admin/admin"
-	@echo "Press Ctrl+C to stop"
-	@kubectl port-forward -n monitoring svc/grafana 3000:3000
-
-prometheus:
-	@echo "🔌 Port forwarding Prometheus to http://localhost:9090"
-	@echo "Press Ctrl+C to stop"
-	@kubectl port-forward -n monitoring svc/prometheus 9090:9090
-
 monitoring-status:
 	@echo "=== Monitoring Pods ==="
 	@kubectl get pods -n monitoring -o wide
@@ -276,9 +312,6 @@ web:
 	@echo "Press Ctrl+C to stop the server"
 	@cd web && python3 -m http.server 3000
 
-test-autoscaling:
-	@./scripts/test-autoscaling.sh
-
 #
 # Help
 #
@@ -314,22 +347,19 @@ help:
 	@echo "  k8s-deploy         Deploy to K8s (full deployment)"
 	@echo "  k8s-redeploy       Fast redeploy single service [SERVICE required]"
 	@echo "  k8s-restart        Restart K8s deployments [SERVICE=all]"
-	@echo "  k8s-delete         Delete all K8s resources"
+	@echo "  k8s-clean          Destroy everything (namespaces + images)"
 	@echo ""
 	@echo "Kubernetes Utilities:"
 	@echo "  k8s-status         Show K8s resource status"
 	@echo "  k8s-logs           Show logs [SERVICE=all or specific]"
-	@echo "  k8s-port-forward   Port forward API to localhost:8080"
+	@echo "  k8s-forward        Port forward all services (API, Grafana, Prometheus, Controller)"
 	@echo ""
 	@echo "Monitoring:"
-	@echo "  grafana            Port forward Grafana to localhost:3000"
-	@echo "  prometheus         Port forward Prometheus to localhost:9090"
 	@echo "  monitoring-status  Show monitoring stack status"
 	@echo ""
 	@echo "Test Targets:"
 	@echo "  test               Run unit tests"
 	@echo "  test-coverage      Run tests with coverage"
-	@echo "  test-autoscaling   Test auto-scaling demo"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  fmt                Format Go code"

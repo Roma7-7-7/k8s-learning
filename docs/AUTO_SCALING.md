@@ -102,19 +102,6 @@ kubectl logs -l app=controller -n k8s-learning -f
 kubectl get events -n k8s-learning | grep worker
 ```
 
-### Test Auto-Scaling
-
-```bash
-# Run auto-scaling demonstration
-make test-autoscaling
-
-# Generate load to trigger scaling
-make run-stress-test
-
-# Monitor scaling in another terminal
-kubectl get deployment worker -n k8s-learning -w
-```
-
 ### Local Development
 
 Run the controller locally while connecting to minikube cluster:

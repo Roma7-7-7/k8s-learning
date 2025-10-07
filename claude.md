@@ -308,11 +308,11 @@ make k8s-build SERVICE=worker   # Build only worker image
 ```bash
 # Full deployment (all services)
 make k8s-local         # Build, load, deploy all services
-make k8s-build         # Build Docker images
+make k8s-build         # Build Docker images with unique tags
 make k8s-load          # Load images into minikube
 make k8s-deploy        # Deploy to K8s
 
-# Fast single-service redeploy (replaces old redeploy-controller script)
+# Fast single-service redeploy (recommended for development)
 make k8s-redeploy SERVICE=controller  # Rebuild + redeploy controller
 make k8s-redeploy SERVICE=api         # Rebuild + redeploy API
 
@@ -328,12 +328,28 @@ make k8s-restart                      # Restart all deployments
 make k8s-restart SERVICE=api          # Restart API deployment only
 ```
 
+#### Image Tagging Strategy
+
+The build system uses **git SHA + timestamp** tags for Kubernetes images to ensure every build is unique and avoids caching issues:
+
+- **Format**: `<git-sha>-<timestamp>` (e.g., `cfb577f-1759830200`)
+- **Benefits**:
+  - Minikube always pulls fresh images (no cache conflicts)
+  - Git SHA provides traceability to code state
+  - Timestamp ensures uniqueness for uncommitted changes
+  - Supports iterative development without committing
+
+**How it works:**
+- Each `make k8s-build` generates a unique tag
+- `make k8s-redeploy` uses same tag across build/load/deploy steps
+- Deployment is updated via `kubectl set image` to use the new tag
+- Kubernetes automatically pulls and rolls out the new image
+
 ### Testing Commands
 ```bash
 make test              # Run unit tests
 make test-coverage     # Run tests with coverage report
 make run-stress-test   # Run load/stress testing
-make test-autoscaling  # Test queue-based auto-scaling demonstration
 ```
 
 ### Monitoring Commands
@@ -341,21 +357,16 @@ make test-autoscaling  # Test queue-based auto-scaling demonstration
 # Deploy monitoring stack
 kubectl apply -f deployments/base/monitoring/monitoring.yaml
 
-# Access Grafana (easiest method)
-make grafana
-# Opens at http://localhost:3000
-# Default credentials: admin/admin
-
-# Access Prometheus
-make prometheus
-# Opens at http://localhost:9090
+# Port forward all services (recommended)
+make k8s-forward
+# This forwards:
+#   - API:        http://localhost:8080
+#   - Grafana:    http://localhost:3000 (admin/admin)
+#   - Prometheus: http://localhost:9090
+#   - Controller: http://localhost:8081/metrics
 
 # Check monitoring status
 make monitoring-status
-
-# View API metrics directly
-kubectl port-forward -n k8s-learning svc/api 8080:8080
-curl http://localhost:8080/metrics
 
 # Remove monitoring stack
 kubectl delete -f deployments/base/monitoring/monitoring.yaml
@@ -396,18 +407,6 @@ The project implements queue-based auto-scaling using a custom Kubernetes contro
 - `RECONCILE_INTERVAL`: Controller reconciliation interval (default: 30s)
 - `METRICS_COLLECTION_INTERVAL`: Metrics update interval (default: 15s)
 - Environment variables: `REDIS_HOST`, `REDIS_PORT`, `LOG_LEVEL`
-
-### Testing Auto-Scaling
-```bash
-# Run auto-scaling demonstration
-make test-autoscaling
-
-# Monitor worker scaling in real-time
-kubectl get deployment worker -n k8s-learning -w
-
-# Generate load to trigger scaling
-make run-stress-test
-```
 
 See `docs/AUTO_SCALING.md` for comprehensive architecture details.
 
