@@ -21,15 +21,16 @@ type API struct {
 }
 
 type Worker struct {
-	Database          Database
-	Redis             Redis
-	Storage           Storage
-	Logging           Logging
-	WorkerID          string        `envconfig:"WORKER_ID"`
-	ConcurrentJobs    int           `envconfig:"CONCURRENT_JOBS" default:"5"`
-	HeartbeatInterval time.Duration `envconfig:"HEARTBEAT_INTERVAL" default:"30s"`
-	PollInterval      time.Duration `envconfig:"POLL_INTERVAL" default:"5s"`
-	MetricsPort       int           `envconfig:"METRICS_PORT" default:"9090"`
+	Database             Database
+	Redis                Redis
+	Storage              Storage
+	Logging              Logging
+	WorkerID             string        `envconfig:"WORKER_ID"`
+	ConcurrentJobs       int           `envconfig:"CONCURRENT_JOBS" default:"5"`
+	HeartbeatInterval    time.Duration `envconfig:"HEARTBEAT_INTERVAL" default:"30s"`
+	PollInterval         time.Duration `envconfig:"POLL_INTERVAL" default:"5s"`
+	MetricsPort          int           `envconfig:"METRICS_PORT" default:"9090"`
+	QueueMetricsInterval time.Duration `envconfig:"QUEUE_METRICS_INTERVAL" default:"15s"`
 }
 
 type Controller struct {
@@ -205,6 +206,17 @@ func (w *Worker) Validate() error {
 	// Metrics port validation
 	if w.MetricsPort <= 0 || w.MetricsPort > 65535 {
 		return fmt.Errorf("invalid metrics port: %d", w.MetricsPort)
+	}
+
+	// Interval validation
+	if w.HeartbeatInterval <= 0 {
+		return errors.New("heartbeat interval must be positive")
+	}
+	if w.PollInterval <= 0 {
+		return errors.New("poll interval must be positive")
+	}
+	if w.QueueMetricsInterval <= 0 {
+		return errors.New("queue metrics interval must be positive")
 	}
 
 	// Storage validation

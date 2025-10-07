@@ -99,4 +99,13 @@ var (
 		},
 		[]string{"worker_id", "version"},
 	)
+
+	// QueueDepth tracks the number of jobs pending in each queue.
+	QueueDepth = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "worker_queue_depth",
+			Help: "Number of jobs pending in the queue",
+		},
+		[]string{"queue_name"},
+	)
 )
