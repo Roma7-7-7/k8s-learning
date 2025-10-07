@@ -2,7 +2,10 @@
 
 set -e
 
-echo "Deploying to local Kubernetes..."
+# Accept optional image tag parameter
+IMAGE_TAG=${1:-latest}
+
+echo "Deploying to local Kubernetes (image tag: ${IMAGE_TAG})..."
 
 # Check if kubectl is available
 if ! command -v kubectl &> /dev/null; then
@@ -16,9 +19,14 @@ if ! command -v kustomize &> /dev/null; then
     exit 1
 fi
 
-# Build and deploy using kustomize
+# Build and deploy using kustomize with image tag override
 echo "Applying Kubernetes manifests..."
-kustomize build deployments/overlays/development | kubectl apply -f -
+kustomize build deployments/overlays/development | \
+    sed "s|k8s-learning/api:latest|k8s-learning/api:${IMAGE_TAG}|g" | \
+    sed "s|k8s-learning/worker:latest|k8s-learning/worker:${IMAGE_TAG}|g" | \
+    sed "s|k8s-learning/controller:latest|k8s-learning/controller:${IMAGE_TAG}|g" | \
+    sed "s|k8s-learning/web:latest|k8s-learning/web:${IMAGE_TAG}|g" | \
+    kubectl apply -f -
 
 echo "Waiting for deployments to be ready..."
 kubectl wait --for=condition=available --timeout=300s deployment/postgres -n k8s-learning

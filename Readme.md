@@ -37,7 +37,7 @@ make k8s-port-forward
 make k8s-status
 
 # Clean up
-make k8s-delete
+make k8s-clean
 ```
 
 ## Architecture
@@ -97,7 +97,6 @@ make k8s-logs SERVICE=api             # Follow service logs
 # Testing
 make test-coverage      # Coverage report
 make run-stress-test    # Load testing
-make test-autoscaling   # Auto-scaling demo
 
 # Monitoring
 kubectl apply -f deployments/base/monitoring/monitoring.yaml  # Deploy
@@ -172,13 +171,6 @@ make run-stress-test
 ./build/stress-test --file test-files/sample.txt \
   --duration 60 --concurrency 5 \
   --min-process-delay 1000 --max-process-delay 5000
-```
-
-**Auto-Scaling Demo:**
-```bash
-make test-autoscaling
-# Watch workers scale in real-time
-kubectl get deployment worker -n k8s-learning -w
 ```
 
 ## License

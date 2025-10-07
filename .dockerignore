@@ -1,0 +1,65 @@
+# Build artifacts
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Test and coverage
+coverage.*
+*.coverprofile
+profile.cov
+
+# Dependencies
+vendor/
+
+# Environment files
+.env
+.env.*
+http-client.private.env.json
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local development directories
+uploads/
+results/
+test-files/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Documentation (not needed in container)
+*.md
+docs/
+
+# CI/CD
+.golangci.yml
+
+# Kubernetes manifests (not needed in container)
+k8s/
+deployments/
+
+# Scripts (not needed in container)
+scripts/
+
+# Docker files (exclude all except nginx.conf needed for web image)
+docker/Dockerfile.*
+Dockerfile*
+.dockerignore
+
+# macOS
+.DS_Store
+
+# Go workspace
+go.work
+go.work.sum
