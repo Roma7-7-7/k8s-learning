@@ -368,6 +368,9 @@ make k8s-forward
 # Check monitoring status
 make monitoring-status
 
+# Deploy/update Grafana dashboards
+make deploy-dashboards
+
 # Remove monitoring stack
 kubectl delete -f deployments/base/monitoring/monitoring.yaml
 ```
@@ -445,6 +448,12 @@ annotations:
 - Include panels for key metrics: latency, throughput, errors, resource usage
 - Use consistent color schemes and units
 - Add threshold lines for SLOs/SLAs
+- Deploy dashboards with `make deploy-dashboards` after creating/updating JSON files
+- Dashboards are automatically loaded via ConfigMap provisioning
+
+**Available Dashboards:**
+- `api-dashboard.json` - API service metrics (requests, latency, errors)
+- `worker-dashboard.json` - Worker metrics (jobs, queues, database, Redis operations)
 
 See `docs/MONITORING.md` for detailed setup and dashboard creation.
 
