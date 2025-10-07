@@ -16,10 +16,10 @@ patches:
       value: "64Mi"
     - op: replace
       path: /spec/template/spec/containers/0/resources/requests/cpu
-      value: "10m"
+      value: "100m"
     - op: replace
       path: /spec/template/spec/containers/0/resources/limits/cpu
-      value: "50m"
+      value: "500m"
   target:
     kind: Deployment
     name: api
@@ -33,10 +33,10 @@ patches:
       value: "64Mi"
     - op: replace
       path: /spec/template/spec/containers/0/resources/requests/cpu
-      value: "10m"
+      value: "100m"
     - op: replace
       path: /spec/template/spec/containers/0/resources/limits/cpu
-      value: "50m"
+      value: "500m"
   target:
     kind: Deployment
     name: worker
@@ -50,10 +50,10 @@ patches:
       value: "64Mi"
     - op: replace
       path: /spec/template/spec/containers/0/resources/requests/cpu
-      value: "10m"
+      value: "100m"
     - op: replace
       path: /spec/template/spec/containers/0/resources/limits/cpu
-      value: "50m"
+      value: "500m"
   target:
     kind: Deployment
     name: controller
