@@ -16,16 +16,26 @@ spec:
       labels:
         app: worker
         component: processor
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
       - name: worker
         image: k8s-learning/worker:latest
         imagePullPolicy: Never
+        ports:
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
         env:
         - name: WORKER_ID
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: METRICS_PORT
+          value: "9090"
         envFrom:
         - configMapRef:
             name: app-config

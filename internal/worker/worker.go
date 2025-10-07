@@ -13,6 +13,7 @@ import (
 	"github.com/rsav/k8s-learning/internal/config"
 	"github.com/rsav/k8s-learning/internal/storage/database"
 	"github.com/rsav/k8s-learning/internal/storage/queue"
+	"github.com/rsav/k8s-learning/internal/worker/metrics"
 )
 
 type Worker struct {
@@ -105,9 +106,15 @@ func (w *Worker) heartbeatLoop(ctx context.Context) {
 	ticker := time.NewTicker(w.config.HeartbeatInterval)
 	defer ticker.Stop()
 
+	redisStart := time.Now()
 	if err := w.queue.SetWorkerHeartbeat(ctx, w.workerID, w.config.HeartbeatInterval); err != nil {
 		w.log.ErrorContext(ctx, "failed to set initial heartbeat", "error", err, "worker_id", w.workerID)
+		metrics.HeartbeatsTotal.WithLabelValues(w.workerID, "error").Inc()
+	} else {
+		metrics.HeartbeatsTotal.WithLabelValues(w.workerID, "success").Inc()
 	}
+	metrics.RedisOperationsTotal.WithLabelValues(w.workerID, "set_heartbeat").Inc()
+	metrics.RedisOperationDuration.WithLabelValues(w.workerID, "set_heartbeat").Observe(time.Since(redisStart).Seconds())
 
 	for {
 		select {
@@ -116,11 +123,16 @@ func (w *Worker) heartbeatLoop(ctx context.Context) {
 		case <-w.shutdownCh:
 			return
 		case <-ticker.C:
+			redisStart := time.Now()
 			if err := w.queue.SetWorkerHeartbeat(ctx, w.workerID, w.config.HeartbeatInterval); err != nil {
 				w.log.ErrorContext(ctx, "failed to set heartbeat", "error", err, "worker_id", w.workerID)
+				metrics.HeartbeatsTotal.WithLabelValues(w.workerID, "error").Inc()
 			} else {
 				w.log.DebugContext(ctx, "heartbeat sent", "worker_id", w.workerID)
+				metrics.HeartbeatsTotal.WithLabelValues(w.workerID, "success").Inc()
 			}
+			metrics.RedisOperationsTotal.WithLabelValues(w.workerID, "set_heartbeat").Inc()
+			metrics.RedisOperationDuration.WithLabelValues(w.workerID, "set_heartbeat").Observe(time.Since(redisStart).Seconds())
 		}
 	}
 }
@@ -135,7 +147,11 @@ func (w *Worker) jobLoop(ctx context.Context) {
 		case <-w.shutdownCh:
 			return
 		default:
+			consumeStart := time.Now()
 			message, err := w.queue.ConsumeJob(ctx, w.config.PollInterval)
+			metrics.RedisOperationsTotal.WithLabelValues(w.workerID, "consume_job").Inc()
+			metrics.RedisOperationDuration.WithLabelValues(w.workerID, "consume_job").Observe(time.Since(consumeStart).Seconds())
+
 			if err != nil {
 				if errors.Is(err, queue.ErrNoJobsAvailable) {
 					w.log.DebugContext(ctx, "no jobs available, waiting", "worker_id", w.workerID)
@@ -154,8 +170,12 @@ func (w *Worker) jobLoop(ctx context.Context) {
 
 			select {
 			case w.jobSema <- struct{}{}:
+				metrics.JobsActive.WithLabelValues(w.workerID).Inc()
 				go func(msg *queue.SubmitJobMessage) {
-					defer func() { <-w.jobSema }()
+					defer func() {
+						<-w.jobSema
+						metrics.JobsActive.WithLabelValues(w.workerID).Dec()
+					}()
 					w.processJob(ctx, msg)
 				}(message)
 			case <-ctx.Done():
@@ -173,19 +193,37 @@ const jobIDKey contextKey = "job_id"
 
 func (w *Worker) processJob(ctx context.Context, message *queue.SubmitJobMessage) {
 	jobCtx := context.WithValue(ctx, jobIDKey, message.JobID)
+	start := time.Now()
 
 	w.log.InfoContext(jobCtx, "processing job",
 		"job_id", message.JobID,
 		"processing_type", message.ProcessingType,
 		"worker_id", w.workerID)
 
+	// Track job delay metric
+	if message.DelayMS > 0 {
+		const millisecondsToSeconds = 1000.0
+		metrics.JobDelaySeconds.WithLabelValues(w.workerID, string(message.ProcessingType)).Observe(float64(message.DelayMS) / millisecondsToSeconds)
+	}
+
+	// Record database operation
+	updateStart := time.Now()
 	if err := w.repository.UpdateStatus(jobCtx, message.JobID, database.JobStatusRunning, &w.workerID); err != nil {
 		w.log.ErrorContext(jobCtx, "failed to update job status to running", "error", err, "job_id", message.JobID)
+		metrics.DBQueriesTotal.WithLabelValues(w.workerID, "update_status").Inc()
+		metrics.DBQueryDuration.WithLabelValues(w.workerID, "update_status").Observe(time.Since(updateStart).Seconds())
+		metrics.JobsProcessedTotal.WithLabelValues(w.workerID, string(message.ProcessingType), "failed").Inc()
+
+		redisStart := time.Now()
 		if publishErr := w.queue.PublishToFailedQueue(jobCtx, *message, err.Error()); publishErr != nil {
 			w.log.ErrorContext(jobCtx, "failed to publish job to failed queue", "error", publishErr, "job_id", message.JobID)
 		}
+		metrics.RedisOperationsTotal.WithLabelValues(w.workerID, "publish_failed").Inc()
+		metrics.RedisOperationDuration.WithLabelValues(w.workerID, "publish_failed").Observe(time.Since(redisStart).Seconds())
 		return
 	}
+	metrics.DBQueriesTotal.WithLabelValues(w.workerID, "update_status").Inc()
+	metrics.DBQueryDuration.WithLabelValues(w.workerID, "update_status").Observe(time.Since(updateStart).Seconds())
 
 	processingJob := &ProcessingJob{
 		JobID:          message.JobID.String(),
@@ -198,19 +236,35 @@ func (w *Worker) processJob(ctx context.Context, message *queue.SubmitJobMessage
 	outputPath, err := w.textProcessor.Process(jobCtx, processingJob)
 	if err != nil {
 		w.log.ErrorContext(jobCtx, "processor failed", "error", err, "job_id", message.JobID)
+		updateStart := time.Now()
 		if updateErr := w.repository.UpdateError(jobCtx, message.JobID, err.Error()); updateErr != nil {
 			w.log.ErrorContext(jobCtx, "failed to update job error", "error", updateErr, "job_id", message.JobID)
 		}
+		metrics.DBQueriesTotal.WithLabelValues(w.workerID, "update_error").Inc()
+		metrics.DBQueryDuration.WithLabelValues(w.workerID, "update_error").Observe(time.Since(updateStart).Seconds())
+		metrics.JobsProcessedTotal.WithLabelValues(w.workerID, string(message.ProcessingType), "failed").Inc()
+		metrics.JobProcessingDuration.WithLabelValues(w.workerID, string(message.ProcessingType)).Observe(time.Since(start).Seconds())
 		return
 	}
 
+	updateStart = time.Now()
 	if err := w.repository.UpdateResult(jobCtx, message.JobID, outputPath); err != nil {
 		w.log.ErrorContext(jobCtx, "failed to update job result", "error", err, "job_id", message.JobID)
+		metrics.DBQueriesTotal.WithLabelValues(w.workerID, "update_result").Inc()
+		metrics.DBQueryDuration.WithLabelValues(w.workerID, "update_result").Observe(time.Since(updateStart).Seconds())
 		if updateErr := w.repository.UpdateError(jobCtx, message.JobID, err.Error()); updateErr != nil {
 			w.log.ErrorContext(jobCtx, "failed to update job error after result update failure", "error", updateErr, "job_id", message.JobID)
 		}
+		metrics.JobsProcessedTotal.WithLabelValues(w.workerID, string(message.ProcessingType), "failed").Inc()
+		metrics.JobProcessingDuration.WithLabelValues(w.workerID, string(message.ProcessingType)).Observe(time.Since(start).Seconds())
 		return
 	}
+	metrics.DBQueriesTotal.WithLabelValues(w.workerID, "update_result").Inc()
+	metrics.DBQueryDuration.WithLabelValues(w.workerID, "update_result").Observe(time.Since(updateStart).Seconds())
+
+	// Record successful job completion
+	metrics.JobsProcessedTotal.WithLabelValues(w.workerID, string(message.ProcessingType), "success").Inc()
+	metrics.JobProcessingDuration.WithLabelValues(w.workerID, string(message.ProcessingType)).Observe(time.Since(start).Seconds())
 
 	w.log.InfoContext(jobCtx, "job completed successfully",
 		"job_id", message.JobID,

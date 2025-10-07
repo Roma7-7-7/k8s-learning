@@ -45,7 +45,7 @@ else
 	SELECTED_GO_SERVICES=$(filter $(SERVICE),$(GO_SERVICES))
 endif
 
-.PHONY: all build clean test deps fmt lint help web monitoring-status k8s-forward
+.PHONY: all build clean test deps fmt lint help web monitoring-status deploy-dashboards k8s-forward
 
 # Default target
 all: fmt test build
@@ -283,6 +283,9 @@ monitoring-status:
 	@echo "=== Monitoring Services ==="
 	@kubectl get svc -n monitoring
 
+deploy-dashboards:
+	@./scripts/deploy-grafana-dashboards.sh
+
 #
 # Development Helpers
 #
@@ -356,6 +359,7 @@ help:
 	@echo ""
 	@echo "Monitoring:"
 	@echo "  monitoring-status  Show monitoring stack status"
+	@echo "  deploy-dashboards  Deploy Grafana dashboards from JSON files"
 	@echo ""
 	@echo "Test Targets:"
 	@echo "  test               Run unit tests"

@@ -29,6 +29,7 @@ type Worker struct {
 	ConcurrentJobs    int           `envconfig:"CONCURRENT_JOBS" default:"5"`
 	HeartbeatInterval time.Duration `envconfig:"HEARTBEAT_INTERVAL" default:"30s"`
 	PollInterval      time.Duration `envconfig:"POLL_INTERVAL" default:"5s"`
+	MetricsPort       int           `envconfig:"METRICS_PORT" default:"9090"`
 }
 
 type Controller struct {
@@ -199,6 +200,11 @@ func (w *Worker) Validate() error {
 	// Redis port validation
 	if w.Redis.Port <= 0 || w.Redis.Port > 65535 {
 		return fmt.Errorf("invalid redis port: %d", w.Redis.Port)
+	}
+
+	// Metrics port validation
+	if w.MetricsPort <= 0 || w.MetricsPort > 65535 {
+		return fmt.Errorf("invalid metrics port: %d", w.MetricsPort)
 	}
 
 	// Storage validation

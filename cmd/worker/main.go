@@ -2,17 +2,23 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/rsav/k8s-learning/internal/config"
 	"github.com/rsav/k8s-learning/internal/storage/database"
 	"github.com/rsav/k8s-learning/internal/storage/queue"
 	"github.com/rsav/k8s-learning/internal/worker"
+	"github.com/rsav/k8s-learning/internal/worker/metrics"
 )
 
 func main() {
@@ -45,6 +51,10 @@ func runWithShutdown(cfg *config.Worker) int {
 
 func run(ctx context.Context, cfg *config.Worker, log *slog.Logger) int {
 	log.InfoContext(ctx, "starting worker", "worker_id", cfg.WorkerID)
+
+	// Set worker info metric
+	metrics.WorkerInfo.WithLabelValues(cfg.WorkerID, "1.0.0").Set(1)
+
 	repo, err := database.NewRepository(cfg.Database, log)
 	if err != nil {
 		log.ErrorContext(ctx, "failed to initialize database", "error", err)
@@ -73,14 +83,56 @@ func run(ctx context.Context, cfg *config.Worker, log *slog.Logger) int {
 		return 1
 	}
 
+	// Start metrics server
+	var wg sync.WaitGroup
+	metricsServer := startMetricsServer(ctx, cfg.MetricsPort, log, &wg)
+
 	log.InfoContext(ctx, "worker starting...")
 	if err := w.Start(ctx); err != nil {
 		log.ErrorContext(ctx, "worker failed", "error", err)
+		shutdownMetricsServer(metricsServer, log)
+		wg.Wait()
 		return 1
 	}
 
+	// Shutdown metrics server
+	shutdownMetricsServer(metricsServer, log)
+	wg.Wait()
+
 	log.InfoContext(ctx, "worker shutdown complete")
 	return 0
+}
+
+func startMetricsServer(ctx context.Context, port int, log *slog.Logger, wg *sync.WaitGroup) *http.Server {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+
+	server := &http.Server{
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second, //nolint:mnd // reasonable timeout for metrics endpoint
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		log.InfoContext(ctx, "starting metrics server", "port", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.ErrorContext(ctx, "metrics server error", "error", err)
+		}
+	}()
+
+	return server
+}
+
+func shutdownMetricsServer(server *http.Server, log *slog.Logger) {
+	const shutdownTimeout = 5 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.ErrorContext(ctx, "metrics server shutdown error", "error", err)
+	}
 }
 
 func setupLogger(config config.Logging) *slog.Logger {
