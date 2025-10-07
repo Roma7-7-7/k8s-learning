@@ -80,8 +80,11 @@ func (s *Server) setupRoutes() {
 	jobHandler := handlers.NewJob(s.repo, s.queue, s.fileStore, s.log)
 	healthHandler := handlers.NewHealth(s.repo, s.queue, s.log)
 
-	mux.HandleFunc("GET /health", healthHandler.Health)
-	mux.HandleFunc("GET /ready", healthHandler.Ready)
+	// Kubernetes-style health endpoints
+	mux.HandleFunc("GET /livez", healthHandler.Livez)
+	mux.HandleFunc("GET /readyz", healthHandler.Readyz)
+	mux.HandleFunc("GET /healthz", healthHandler.Livez) // Alias for livez
+
 	mux.HandleFunc("GET /stats", healthHandler.Stats)
 
 	// Prometheus metrics endpoint

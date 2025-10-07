@@ -64,7 +64,7 @@ func main() {
 
 	// Start servers
 	metricsServer := startMetricsServer(ctx, metricsAddr, log)
-	healthServer := startHealthServer(ctx, probeAddr, log)
+	healthServer := startHealthServer(ctx, probeAddr, log, redisQueue)
 
 	// Setup graceful shutdown
 	setupGracefulShutdown(ctx, log, metricsServer, healthServer)
@@ -144,13 +144,29 @@ func startMetricsServer(ctx context.Context, addr string, log *slog.Logger) *htt
 	return server
 }
 
-func startHealthServer(ctx context.Context, addr string, log *slog.Logger) *http.Server {
+func startHealthServer(ctx context.Context, addr string, log *slog.Logger, redisQueue *queue.RedisQueue) *http.Server {
 	healthMux := http.NewServeMux()
+
+	// Liveness check - basic check that process is running
+	healthMux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	// Alias for livez
 	healthMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
-	healthMux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+
+	// Readiness check - verify Redis connectivity
+	healthMux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		if err := redisQueue.HealthCheck(r.Context()); err != nil {
+			log.ErrorContext(r.Context(), "redis health check failed", "error", err)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("NOT READY"))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})

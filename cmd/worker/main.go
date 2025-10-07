@@ -83,9 +83,9 @@ func run(ctx context.Context, cfg *config.Worker, log *slog.Logger) int {
 		return 1
 	}
 
-	// Start metrics server
+	// Start metrics and health server
 	var wg sync.WaitGroup
-	metricsServer := startMetricsServer(ctx, cfg.MetricsPort, log, &wg)
+	metricsServer := startMetricsServer(ctx, cfg.MetricsPort, log, &wg, repo, redisQueue)
 
 	log.InfoContext(ctx, "worker starting...")
 	if err := w.Start(ctx); err != nil {
@@ -103,9 +103,44 @@ func run(ctx context.Context, cfg *config.Worker, log *slog.Logger) int {
 	return 0
 }
 
-func startMetricsServer(ctx context.Context, port int, log *slog.Logger, wg *sync.WaitGroup) *http.Server {
+func startMetricsServer(ctx context.Context, port int, log *slog.Logger, wg *sync.WaitGroup, repo *database.Repository, queue *queue.RedisQueue) *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
+
+	// Health endpoints
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		allHealthy := true
+
+		// Check database connectivity
+		if err := repo.HealthCheck(r.Context()); err != nil {
+			log.ErrorContext(r.Context(), "database health check failed", "error", err)
+			allHealthy = false
+		}
+
+		// Check Redis connectivity
+		if err := queue.HealthCheck(r.Context()); err != nil {
+			log.ErrorContext(r.Context(), "redis health check failed", "error", err)
+			allHealthy = false
+		}
+
+		if allHealthy {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("OK"))
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("NOT READY"))
+		}
+	})
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
@@ -116,7 +151,7 @@ func startMetricsServer(ctx context.Context, port int, log *slog.Logger, wg *syn
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		log.InfoContext(ctx, "starting metrics server", "port", port)
+		log.InfoContext(ctx, "starting metrics and health server", "port", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.ErrorContext(ctx, "metrics server error", "error", err)
 		}

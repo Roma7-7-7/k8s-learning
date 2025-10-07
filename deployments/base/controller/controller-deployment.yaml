@@ -40,7 +40,7 @@ spec:
           protocol: TCP
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /livez
             port: health
           initialDelaySeconds: 15
           periodSeconds: 20

@@ -22,7 +22,8 @@ func NewHealth(repo Repository, queue Queue, log *slog.Logger) *Health {
 	}
 }
 
-func (hh *Health) Health(w http.ResponseWriter, _ *http.Request) {
+// Livez is a basic liveness check - process is running and not deadlocked.
+func (hh *Health) Livez(w http.ResponseWriter, _ *http.Request) {
 	health := map[string]interface{}{
 		"status":    "ok",
 		"timestamp": time.Now().Unix(),
@@ -32,7 +33,8 @@ func (hh *Health) Health(w http.ResponseWriter, _ *http.Request) {
 	hh.writeJSON(w, http.StatusOK, health)
 }
 
-func (hh *Health) Ready(w http.ResponseWriter, r *http.Request) {
+// Readyz checks if the service is ready to accept traffic (dependencies are healthy).
+func (hh *Health) Readyz(w http.ResponseWriter, r *http.Request) {
 	checks := map[string]interface{}{
 		"database": "unknown",
 		"redis":    "unknown",

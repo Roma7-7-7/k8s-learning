@@ -54,6 +54,18 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9090
+          initialDelaySeconds: 5
+          periodSeconds: 5
       volumes:
       - name: uploads-storage
         persistentVolumeClaim:
