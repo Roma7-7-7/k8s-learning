@@ -4,11 +4,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
+	"math/big"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -171,7 +172,12 @@ func makeRequest(client *http.Client, config Config) requestResult {
 	// Generate random delay within the specified range
 	delayMS := config.MinProcessDelay
 	if config.MaxProcessDelay > config.MinProcessDelay {
-		delayMS = config.MinProcessDelay + rand.Intn(config.MaxProcessDelay-config.MinProcessDelay+1)
+		maxDelay := config.MaxProcessDelay - config.MinProcessDelay + 1
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(maxDelay)))
+		if err != nil {
+			panic("failed to generate random number: " + err.Error())
+		}
+		delayMS = config.MinProcessDelay + int(n.Int64())
 	}
 
 	// Create multipart form

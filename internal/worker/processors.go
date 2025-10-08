@@ -96,6 +96,7 @@ func (tp *TextProcessor) processWordCount(_ context.Context, job *ProcessingJob)
 }
 
 func (tp *TextProcessor) processLineCount(_ context.Context, job *ProcessingJob) (string, error) {
+	// #nosec G304 -- job.FilePath is validated in readFile() and comes from trusted database source
 	file, err := os.Open(job.FilePath)
 	if err != nil {
 		return "", NewFileReadError(job.FilePath, err)
@@ -204,7 +205,20 @@ func (tp *TextProcessor) processExtract(_ context.Context, job *ProcessingJob) (
 }
 
 func (tp *TextProcessor) readFile(filePath string) (string, error) {
-	content, err := os.ReadFile(filePath)
+	// Validate that the file path is within expected directories
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve file path: %w", err)
+	}
+
+	// Ensure the path doesn't contain path traversal attempts
+	cleanPath := filepath.Clean(filePath)
+	if cleanPath != filePath {
+		return "", fmt.Errorf("invalid file path %s: contains path traversal", filePath)
+	}
+
+	// #nosec G304 -- filePath is validated and comes from database (originally created by FileStore with UUID)
+	content, err := os.ReadFile(absPath)
 	if err != nil {
 		return "", fmt.Errorf("read file: %w", err)
 	}

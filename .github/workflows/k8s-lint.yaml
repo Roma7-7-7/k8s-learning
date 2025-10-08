@@ -1,0 +1,56 @@
+name: Kubernetes Manifest Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deployments/**/*.yaml'
+      - 'deployments/**/*.yml'
+  pull_request:
+    paths:
+      - 'deployments/**/*.yaml'
+      - 'deployments/**/*.yml'
+
+jobs:
+  kubeval:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate manifests with kubeval
+        uses: instrumenta/kubeval-action@master
+        with:
+          files: deployments/
+
+  kube-linter:
+    name: Lint Kubernetes Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan with kube-linter
+        uses: stackrox/kube-linter-action@v1.0.5
+        with:
+          directory: deployments/
+          format: sarif
+          output-file: kube-linter-results.sarif
+
+      - name: Upload SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: kube-linter-results.sarif
+
+  kubeconform:
+    name: Validate with Kubeconform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate with kubeconform
+        uses: docker://ghcr.io/yannh/kubeconform:latest
+        with:
+          entrypoint: '/kubeconform'
+          args: "-summary -output json deployments/"

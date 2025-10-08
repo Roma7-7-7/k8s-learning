@@ -1,0 +1,112 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  pr-size:
+    name: Check PR Size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            const additions = pr.additions;
+            const deletions = pr.deletions;
+            const changes = additions + deletions;
+
+            let size = 'XS';
+            let color = '0e8a16';
+
+            if (changes > 1000) {
+              size = 'XXL';
+              color = 'b60205';
+            } else if (changes > 500) {
+              size = 'XL';
+              color = 'd93f0b';
+            } else if (changes > 250) {
+              size = 'L';
+              color = 'fbca04';
+            } else if (changes > 100) {
+              size = 'M';
+              color = 'f9d0c4';
+            } else if (changes > 50) {
+              size = 'S';
+              color = 'c5def5';
+            }
+
+            github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [`size/${size}`]
+            });
+
+            if (changes > 500) {
+              github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `⚠️ This PR is quite large (${changes} lines changed). Consider breaking it into smaller PRs for easier review.`
+              });
+            }
+
+  check-todos:
+    name: Check for TODOs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find TODOs
+        id: todos
+        run: |
+          TODO_COUNT=$(grep -rn "TODO\|FIXME\|XXX\|HACK" --include="*.go" --exclude-dir=vendor . | wc -l || echo "0")
+          echo "count=$TODO_COUNT" >> $GITHUB_OUTPUT
+
+          if [ "$TODO_COUNT" -gt 0 ]; then
+            echo "Found $TODO_COUNT TODO/FIXME/XXX/HACK comments:"
+            grep -rn "TODO\|FIXME\|XXX\|HACK" --include="*.go" --exclude-dir=vendor . || true
+          fi
+
+      - name: Comment PR with TODOs
+        if: steps.todos.outputs.count > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const count = ${{ steps.todos.outputs.count }};
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `📝 Found ${count} TODO/FIXME/XXX/HACK comment(s) in this PR. Consider addressing them or creating issues to track them.`
+            });
+
+  conventional-commits:
+    name: Check Conventional Commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .commitlintrc.json
+        continue-on-error: true
