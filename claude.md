@@ -503,6 +503,7 @@ annotations:
 **Available Dashboards:**
 - `api-dashboard.json` - API service metrics (requests, latency, errors)
 - `worker-dashboard.json` - Worker metrics (jobs, queues, database, Redis operations)
+- `controller-dashboard.json` - Controller metrics (queue depth, autoscaling events, worker replicas)
 
 See `docs/MONITORING.md` for detailed setup and dashboard creation.
 
