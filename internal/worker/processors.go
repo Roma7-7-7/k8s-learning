@@ -214,7 +214,7 @@ func (tp *TextProcessor) readFile(filePath string) (string, error) {
 	// Ensure the path doesn't contain path traversal attempts
 	cleanPath := filepath.Clean(filePath)
 	if cleanPath != filePath {
-		return "", fmt.Errorf("invalid file path: contains path traversal")
+		return "", fmt.Errorf("invalid file path %s: contains path traversal", filePath)
 	}
 
 	// #nosec G304 -- filePath is validated and comes from database (originally created by FileStore with UUID)
