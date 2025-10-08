@@ -20,13 +20,6 @@ var (
 		[]string{"queue_name"},
 	)
 
-	activeWorkersGauge = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "textprocessing_active_workers",
-			Help: "Number of active text processing workers",
-		},
-	)
-
 	// Scaling metrics.
 	autoscalingEventsCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -103,17 +96,8 @@ func (m *Collector) CollectQueueMetrics(ctx context.Context) error {
 		queueDepthGauge.WithLabelValues(queueName).Set(float64(length))
 	}
 
-	// Get active workers
-	workers, err := m.queue.GetActiveWorkers(ctx)
-	if err != nil {
-		return err
-	}
-
-	activeWorkersGauge.Set(float64(len(workers)))
-
 	m.log.DebugContext(ctx, "collected queue metrics",
-		"queue_lengths", queueLengths,
-		"active_workers", len(workers))
+		"queue_lengths", queueLengths)
 
 	return nil
 }

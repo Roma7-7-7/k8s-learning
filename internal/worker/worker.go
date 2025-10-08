@@ -73,19 +73,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		w.heartbeatLoop(ctx)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
 		w.jobLoop(ctx)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		w.queueMetricsLoop(ctx)
 	}()
 
 	wg.Add(1)
@@ -106,41 +94,6 @@ func (w *Worker) Stop() {
 	w.log.Info("stopping worker", "worker_id", w.workerID)
 	close(w.shutdownCh)
 	<-w.doneCh
-}
-
-func (w *Worker) heartbeatLoop(ctx context.Context) {
-	ticker := time.NewTicker(w.config.HeartbeatInterval)
-	defer ticker.Stop()
-
-	redisStart := time.Now()
-	if err := w.queue.SetWorkerHeartbeat(ctx, w.workerID, w.config.HeartbeatInterval); err != nil {
-		w.log.ErrorContext(ctx, "failed to set initial heartbeat", "error", err, "worker_id", w.workerID)
-		metrics.HeartbeatsTotal.WithLabelValues(w.workerID, "error").Inc()
-	} else {
-		metrics.HeartbeatsTotal.WithLabelValues(w.workerID, "success").Inc()
-	}
-	metrics.RedisOperationsTotal.WithLabelValues(w.workerID, "set_heartbeat").Inc()
-	metrics.RedisOperationDuration.WithLabelValues(w.workerID, "set_heartbeat").Observe(time.Since(redisStart).Seconds())
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-w.shutdownCh:
-			return
-		case <-ticker.C:
-			redisStart := time.Now()
-			if err := w.queue.SetWorkerHeartbeat(ctx, w.workerID, w.config.HeartbeatInterval); err != nil {
-				w.log.ErrorContext(ctx, "failed to set heartbeat", "error", err, "worker_id", w.workerID)
-				metrics.HeartbeatsTotal.WithLabelValues(w.workerID, "error").Inc()
-			} else {
-				w.log.DebugContext(ctx, "heartbeat sent", "worker_id", w.workerID)
-				metrics.HeartbeatsTotal.WithLabelValues(w.workerID, "success").Inc()
-			}
-			metrics.RedisOperationsTotal.WithLabelValues(w.workerID, "set_heartbeat").Inc()
-			metrics.RedisOperationDuration.WithLabelValues(w.workerID, "set_heartbeat").Observe(time.Since(redisStart).Seconds())
-		}
-	}
 }
 
 func (w *Worker) jobLoop(ctx context.Context) {
@@ -276,41 +229,6 @@ func (w *Worker) processJob(ctx context.Context, message *queue.SubmitJobMessage
 		"job_id", message.JobID,
 		"output_path", outputPath,
 		"worker_id", w.workerID)
-}
-
-func (w *Worker) queueMetricsLoop(ctx context.Context) {
-	ticker := time.NewTicker(w.config.QueueMetricsInterval)
-	defer ticker.Stop()
-
-	// Collect initial metrics
-	w.collectQueueMetrics(ctx)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-w.shutdownCh:
-			return
-		case <-ticker.C:
-			w.collectQueueMetrics(ctx)
-		}
-	}
-}
-
-func (w *Worker) collectQueueMetrics(ctx context.Context) {
-	queueLengths, err := w.queue.GetAllQueuesLength(ctx)
-	if err != nil {
-		w.log.ErrorContext(ctx, "failed to collect queue metrics", "error", err, "worker_id", w.workerID)
-		return
-	}
-
-	for queueName, length := range queueLengths {
-		metrics.QueueDepth.WithLabelValues(queueName).Set(float64(length))
-		w.log.DebugContext(ctx, "queue metrics collected",
-			"queue", queueName,
-			"depth", length,
-			"worker_id", w.workerID)
-	}
 }
 
 func (w *Worker) HealthCheck(ctx context.Context) error {
