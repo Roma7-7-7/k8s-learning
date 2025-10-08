@@ -44,8 +44,7 @@ jobs:
         uses: securego/gosec@master
         with:
           # Output in JSON format to avoid SARIF compatibility issues
-          # Use -no-fail to report findings without failing the build
-          args: '-fmt=json -out=results.json -exclude-generated -no-fail ./...'
+          args: '-fmt=json -out=results.json -exclude-generated ./...'
 
       - name: Display gosec results
         if: always()

@@ -58,8 +58,9 @@ func (fs *FileStore) SaveUploadedFile(fileHeader *multipart.FileHeader) (*FileIn
 	fileID := uuid.New().String()
 	ext := filepath.Ext(fileHeader.Filename)
 	storedName := fmt.Sprintf("%s%s", fileID, ext)
-	storedPath := filepath.Join(fs.uploadDir, storedName)
+	storedPath := filepath.Clean(filepath.Join(fs.uploadDir, storedName))
 
+	// #nosec G304 -- storedPath is constructed from trusted uploadDir + UUID + sanitized extension
 	dst, err := os.Create(storedPath)
 	if err != nil {
 		return nil, fmt.Errorf("create destination file: %w", err)
@@ -100,6 +101,7 @@ func (fs *FileStore) ReadFile(filePath string) ([]byte, error) {
 		return nil, errors.New("invalid file path")
 	}
 
+	// #nosec G304 -- filePath is validated by isValidPath() to be within uploadDir or resultDir
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
+	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -171,7 +171,7 @@ func makeRequest(client *http.Client, config Config) requestResult {
 	// Generate random delay within the specified range
 	delayMS := config.MinProcessDelay
 	if config.MaxProcessDelay > config.MinProcessDelay {
-		delayMS = config.MinProcessDelay + rand.Intn(config.MaxProcessDelay-config.MinProcessDelay+1)
+		delayMS = config.MinProcessDelay + rand.IntN(config.MaxProcessDelay-config.MinProcessDelay+1)
 	}
 
 	// Create multipart form
