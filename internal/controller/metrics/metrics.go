@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	dto "github.com/prometheus/client_model/go"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"github.com/rsav/k8s-learning/internal/storage/queue"
 )
 
 var (
 	// Queue metrics.
-	queueDepthGauge = prometheus.NewGaugeVec(
+	queueDepthGauge = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "textprocessing_queue_depth",
 			Help: "Current depth of text processing queues",
@@ -22,14 +22,14 @@ var (
 		[]string{"queue_name"},
 	)
 
-	activeWorkersGauge = prometheus.NewGauge(
+	activeWorkersGauge = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "textprocessing_active_workers",
 			Help: "Number of active text processing workers",
 		},
 	)
 
-	jobsProcessedCounter = prometheus.NewCounterVec(
+	jobsProcessedCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "textprocessing_jobs_processed_total",
 			Help: "Total number of text processing jobs processed",
@@ -37,7 +37,7 @@ var (
 		[]string{"processing_type", "status"},
 	)
 
-	controllerReconciliationsCounter = prometheus.NewCounterVec(
+	controllerReconciliationsCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "textprocessing_controller_reconciliations_total",
 			Help: "Total number of controller reconciliations",
@@ -45,7 +45,7 @@ var (
 		[]string{"controller", "result"},
 	)
 
-	controllerReconciliationDuration = prometheus.NewHistogramVec(
+	controllerReconciliationDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "textprocessing_controller_reconciliation_duration_seconds",
 			Help:    "Duration of controller reconciliations",
@@ -55,7 +55,7 @@ var (
 	)
 
 	// Scaling metrics.
-	autoscalingEventsCounter = prometheus.NewCounterVec(
+	autoscalingEventsCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "textprocessing_autoscaling_events_total",
 			Help: "Total number of autoscaling events",
@@ -63,7 +63,7 @@ var (
 		[]string{"job_name", "direction"},
 	)
 
-	currentReplicasGauge = prometheus.NewGaugeVec(
+	currentReplicasGauge = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "textprocessing_current_replicas",
 			Help: "Current number of replicas for each TextProcessingJob",
@@ -71,7 +71,7 @@ var (
 		[]string{"job_name", "processing_type"},
 	)
 
-	desiredReplicasGauge = prometheus.NewGaugeVec(
+	desiredReplicasGauge = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "textprocessing_desired_replicas",
 			Help: "Desired number of replicas for each TextProcessingJob",
@@ -79,20 +79,6 @@ var (
 		[]string{"job_name", "processing_type"},
 	)
 )
-
-func init() {
-	// Register metrics with controller-runtime's registry
-	metrics.Registry.MustRegister(
-		queueDepthGauge,
-		activeWorkersGauge,
-		jobsProcessedCounter,
-		controllerReconciliationsCounter,
-		controllerReconciliationDuration,
-		autoscalingEventsCounter,
-		currentReplicasGauge,
-		desiredReplicasGauge,
-	)
-}
 
 // Collector collects and updates Prometheus metrics.
 type Collector struct {
