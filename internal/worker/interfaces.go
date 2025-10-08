@@ -12,8 +12,6 @@ import (
 type JobConsumer interface {
 	ConsumeJob(ctx context.Context, timeout time.Duration) (*queue.SubmitJobMessage, error)
 	PublishToFailedQueue(ctx context.Context, message queue.SubmitJobMessage, errorMsg string) error
-	GetQueueLength(ctx context.Context, queueName string) (int64, error)
-	GetAllQueuesLength(ctx context.Context) (map[string]int64, error)
 	HealthCheck(ctx context.Context) error
 	Close() error
 }

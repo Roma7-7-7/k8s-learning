@@ -380,7 +380,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "worker_queue_depth",
+          "expr": "textprocessing_queue_depth",
           "legendFormat": "{{queue_name}}",
           "range": true,
           "refId": "A"
@@ -1001,7 +1001,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(worker_queue_depth{queue_name=~\"text_tasks|text_tasks:priority\"})",
+          "expr": "sum(textprocessing_queue_depth{queue_name=~\"text_tasks|text_tasks:priority\"})",
           "range": true,
           "refId": "A"
         }
