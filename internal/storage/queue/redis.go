@@ -15,14 +15,11 @@ import (
 )
 
 const (
-	QueueMain      = "text_tasks"
-	QueuePriority  = "text_tasks:priority"
-	QueueFailed    = "text_tasks:failed"
-	QueueHeartbeat = "workers:heartbeat"
+	QueueMain     = "text_tasks"
+	QueuePriority = "text_tasks:priority"
+	QueueFailed   = "text_tasks:failed"
 
-	highPriorityThreshold     = 5
-	heartbeatTTLMultiplier    = 2
-	heartbeatTTLBufferSeconds = 10
+	highPriorityThreshold = 5
 )
 
 var ErrNoJobsAvailable = errors.New("no jobs available in the queue")
@@ -168,87 +165,6 @@ func (rq *RedisQueue) PublishToFailedQueue(ctx context.Context, message SubmitJo
 	return nil
 }
 
-func (rq *RedisQueue) SetWorkerHeartbeat(ctx context.Context, workerID string, ttl time.Duration) error {
-	key := fmt.Sprintf("%s:%s", QueueHeartbeat, workerID)
-	heartbeat := map[string]interface{}{
-		"worker_id": workerID,
-		"last_seen": time.Now().Unix(),
-		"status":    "active",
-	}
-
-	data, err := json.Marshal(heartbeat)
-	if err != nil {
-		return fmt.Errorf("marshal heartbeat: %w", err)
-	}
-
-	// Set heartbeat with a generous TTL buffer (2x heartbeat interval + buffer)
-	heartbeatTTL := ttl*heartbeatTTLMultiplier + heartbeatTTLBufferSeconds*time.Second
-	if err := rq.client.Set(ctx, key, data, heartbeatTTL).Err(); err != nil {
-		return fmt.Errorf("set worker heartbeat: %w", err)
-	}
-
-	return nil
-}
-
-func (rq *RedisQueue) GetActiveWorkers(ctx context.Context) ([]string, error) {
-	pattern := fmt.Sprintf("%s:*", QueueHeartbeat)
-	keys, err := rq.client.Keys(ctx, pattern).Result()
-	if err != nil {
-		return nil, fmt.Errorf("get worker keys: %w", err)
-	}
-
-	var activeWorkers []string
-	for _, key := range keys {
-		val, err := rq.client.Get(ctx, key).Result()
-		if err != nil {
-			continue
-		}
-
-		var heartbeat map[string]interface{}
-		if err := json.Unmarshal([]byte(val), &heartbeat); err != nil {
-			continue
-		}
-
-		if workerID, ok := heartbeat["worker_id"].(string); ok {
-			activeWorkers = append(activeWorkers, workerID)
-		}
-	}
-
-	return activeWorkers, nil
-}
-
-func (rq *RedisQueue) CleanupStaleWorkers(ctx context.Context, maxAge time.Duration) error {
-	pattern := fmt.Sprintf("%s:*", QueueHeartbeat)
-	keys, err := rq.client.Keys(ctx, pattern).Result()
-	if err != nil {
-		return fmt.Errorf("get worker keys: %w", err)
-	}
-
-	cutoff := time.Now().Add(-maxAge).Unix()
-
-	for _, key := range keys {
-		val, err := rq.client.Get(ctx, key).Result()
-		if err != nil {
-			continue
-		}
-
-		var heartbeat map[string]interface{}
-		if err := json.Unmarshal([]byte(val), &heartbeat); err != nil {
-			continue
-		}
-
-		if lastSeen, ok := heartbeat["last_seen"].(float64); ok {
-			if int64(lastSeen) < cutoff {
-				if err := rq.client.Del(ctx, key).Err(); err != nil {
-					return fmt.Errorf("cleanup stale worker: %w", err)
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
 func (rq *RedisQueue) HealthCheck(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second) //nolint: mnd// Use a short timeout for health checks
 	defer cancel()
@@ -266,15 +182,8 @@ func (rq *RedisQueue) GetStats(ctx context.Context) (map[string]interface{}, err
 		return nil, err
 	}
 
-	activeWorkers, err := rq.GetActiveWorkers(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	stats := map[string]interface{}{
-		"queues":         queueLengths,
-		"active_workers": len(activeWorkers),
-		"worker_ids":     activeWorkers,
+		"queues": queueLengths,
 	}
 
 	return stats, nil

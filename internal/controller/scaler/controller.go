@@ -85,7 +85,7 @@ func (r *Worker) scaleWorkerDeployment(ctx context.Context) error {
 	if err != nil {
 		log.ErrorContext(ctx, "failed to get queue stats", "error", err)
 		// Continue with last known values, don't fail reconciliation
-		queueStats = &QueueStats{TotalDepth: 0, ActiveWorkers: int(deployment.Status.ReadyReplicas)}
+		queueStats = &QueueStats{TotalDepth: 0}
 	}
 
 	// Calculate optimal replica count
@@ -95,8 +95,7 @@ func (r *Worker) scaleWorkerDeployment(ctx context.Context) error {
 	log.InfoContext(ctx, "scaling analysis",
 		"current_replicas", currentReplicas,
 		"optimal_replicas", optimalReplicas,
-		"queue_depth", queueStats.TotalDepth,
-		"active_workers", queueStats.ActiveWorkers)
+		"queue_depth", queueStats.TotalDepth)
 
 	// Update deployment if scaling is needed
 	if optimalReplicas != currentReplicas {
@@ -125,10 +124,9 @@ func (r *Worker) scaleWorkerDeployment(ctx context.Context) error {
 	return nil
 }
 
-// QueueStats holds queue and worker statistics.
+// QueueStats holds queue statistics.
 type QueueStats struct {
-	TotalDepth    int64
-	ActiveWorkers int
+	TotalDepth int64
 }
 
 func (r *Worker) getQueueStats(ctx context.Context) (*QueueStats, error) {
@@ -141,19 +139,11 @@ func (r *Worker) getQueueStats(ctx context.Context) (*QueueStats, error) {
 	// Calculate total depth (main + priority queues, exclude failed)
 	totalDepth := queueLengths[queue.QueueMain] + queueLengths[queue.QueuePriority]
 
-	// Get active workers
-	workers, err := r.Queue.GetActiveWorkers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get active workers: %w", err)
-	}
-
 	r.Log.DebugContext(ctx, "collected queue metrics",
-		"queue_lengths", queueLengths,
-		"active_workers", len(workers))
+		"queue_lengths", queueLengths)
 
 	return &QueueStats{
-		TotalDepth:    totalDepth,
-		ActiveWorkers: len(workers),
+		TotalDepth: totalDepth,
 	}, nil
 }
 

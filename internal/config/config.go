@@ -27,7 +27,6 @@ type Worker struct {
 	Logging              Logging
 	WorkerID             string        `envconfig:"WORKER_ID"`
 	ConcurrentJobs       int           `envconfig:"CONCURRENT_JOBS" default:"5"`
-	HeartbeatInterval    time.Duration `envconfig:"HEARTBEAT_INTERVAL" default:"30s"`
 	PollInterval         time.Duration `envconfig:"POLL_INTERVAL" default:"5s"`
 	MetricsPort          int           `envconfig:"METRICS_PORT" default:"8080"`
 	QueueMetricsInterval time.Duration `envconfig:"QUEUE_METRICS_INTERVAL" default:"15s"`
@@ -209,9 +208,6 @@ func (w *Worker) Validate() error {
 	}
 
 	// Interval validation
-	if w.HeartbeatInterval <= 0 {
-		return errors.New("heartbeat interval must be positive")
-	}
 	if w.PollInterval <= 0 {
 		return errors.New("poll interval must be positive")
 	}
@@ -227,14 +223,6 @@ func (w *Worker) Validate() error {
 	// Worker validation
 	if w.ConcurrentJobs <= 0 {
 		return errors.New("concurrent jobs must be positive")
-	}
-
-	if w.HeartbeatInterval <= 0 {
-		return errors.New("heartbeat interval must be positive")
-	}
-
-	if w.PollInterval <= 0 {
-		return errors.New("poll interval must be positive")
 	}
 
 	// SSL mode validation

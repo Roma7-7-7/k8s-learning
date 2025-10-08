@@ -82,15 +82,6 @@ var (
 		[]string{"worker_id", "operation"},
 	)
 
-	// HeartbeatsTotal tracks the total number of heartbeats sent.
-	HeartbeatsTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "worker_heartbeats_total",
-			Help: "Total number of heartbeats sent by the worker",
-		},
-		[]string{"worker_id", "status"},
-	)
-
 	// WorkerInfo provides worker metadata as labels.
 	WorkerInfo = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
