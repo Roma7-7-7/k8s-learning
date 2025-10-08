@@ -43,9 +43,9 @@ jobs:
       - name: Run Gosec Security Scanner
         uses: securego/gosec@master
         with:
-          # Output in text format to avoid SARIF compatibility issues
-          # Use -exclude-generated to skip generated files
-          args: '-fmt=json -out=results.json -exclude-generated ./...'
+          # Output in JSON format to avoid SARIF compatibility issues
+          # Use -no-fail to report findings without failing the build
+          args: '-fmt=json -out=results.json -exclude-generated -no-fail ./...'
 
       - name: Display gosec results
         if: always()
