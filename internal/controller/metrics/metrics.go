@@ -7,8 +7,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	dto "github.com/prometheus/client_model/go"
-
 	"github.com/rsav/k8s-learning/internal/storage/queue"
 )
 
@@ -27,31 +25,6 @@ var (
 			Name: "textprocessing_active_workers",
 			Help: "Number of active text processing workers",
 		},
-	)
-
-	jobsProcessedCounter = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "textprocessing_jobs_processed_total",
-			Help: "Total number of text processing jobs processed",
-		},
-		[]string{"processing_type", "status"},
-	)
-
-	controllerReconciliationsCounter = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "textprocessing_controller_reconciliations_total",
-			Help: "Total number of controller reconciliations",
-		},
-		[]string{"controller", "result"},
-	)
-
-	controllerReconciliationDuration = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "textprocessing_controller_reconciliation_duration_seconds",
-			Help:    "Duration of controller reconciliations",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"controller"},
 	)
 
 	// Scaling metrics.
@@ -145,17 +118,6 @@ func (m *Collector) CollectQueueMetrics(ctx context.Context) error {
 	return nil
 }
 
-// RecordJobProcessed records a processed job.
-func RecordJobProcessed(processingType, status string) {
-	jobsProcessedCounter.WithLabelValues(processingType, status).Inc()
-}
-
-// RecordReconciliation records a controller reconciliation.
-func RecordReconciliation(controller, result string, duration time.Duration) {
-	controllerReconciliationsCounter.WithLabelValues(controller, result).Inc()
-	controllerReconciliationDuration.WithLabelValues(controller).Observe(duration.Seconds())
-}
-
 // RecordAutoscalingEvent records an autoscaling event.
 func RecordAutoscalingEvent(jobName, direction string) {
 	autoscalingEventsCounter.WithLabelValues(jobName, direction).Inc()
@@ -165,21 +127,4 @@ func RecordAutoscalingEvent(jobName, direction string) {
 func UpdateReplicasMetrics(jobName, processingType string, current, desired int32) {
 	currentReplicasGauge.WithLabelValues(jobName, processingType).Set(float64(current))
 	desiredReplicasGauge.WithLabelValues(jobName, processingType).Set(float64(desired))
-}
-
-// GetQueueDepth returns the current queue depth for a specific queue.
-func GetQueueDepth(queueName string) float64 {
-	if gauge, err := queueDepthGauge.GetMetricWithLabelValues(queueName); err == nil {
-		metric := &dto.Metric{}
-		_ = gauge.Write(metric)
-		return metric.GetGauge().GetValue()
-	}
-	return 0
-}
-
-// GetActiveWorkerCount returns the current number of active workers.
-func GetActiveWorkerCount() float64 {
-	metric := &dto.Metric{}
-	_ = activeWorkersGauge.Write(metric)
-	return metric.GetGauge().GetValue()
 }

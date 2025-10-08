@@ -531,235 +531,6 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ops"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "error"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "success"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 16
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(rate(textprocessing_controller_reconciliations_total[5m])) by (result)",
-          "legendFormat": "{{result}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Controller Reconciliation Rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 16
-      },
-      "id": 6,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(textprocessing_controller_reconciliation_duration_seconds_bucket[5m])) by (le, controller))",
-          "legendFormat": "{{controller}} (p50)",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(textprocessing_controller_reconciliation_duration_seconds_bucket[5m])) by (le, controller))",
-          "legendFormat": "{{controller}} (p95)",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(textprocessing_controller_reconciliation_duration_seconds_bucket[5m])) by (le, controller))",
-          "legendFormat": "{{controller}} (p99)",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Reconciliation Duration",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
             "hideFrom": {
@@ -802,7 +573,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 16
       },
       "id": 7,
       "options": {
@@ -894,7 +665,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 16
       },
       "id": 8,
       "options": {
@@ -961,7 +732,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 31
+        "y": 24
       },
       "id": 9,
       "options": {
@@ -1021,7 +792,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 31
+        "y": 24
       },
       "id": 10,
       "options": {
@@ -1081,7 +852,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 31
+        "y": 24
       },
       "id": 11,
       "options": {
@@ -1141,7 +912,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 31
+        "y": 24
       },
       "id": 12,
       "options": {
@@ -1205,7 +976,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 31
+        "y": 24
       },
       "id": 13,
       "options": {
@@ -1265,7 +1036,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 31
+        "y": 24
       },
       "id": 14,
       "options": {
@@ -1317,6 +1088,6 @@
   "timezone": "browser",
   "title": "Controller Service Metrics",
   "uid": "controller-service-metrics",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
