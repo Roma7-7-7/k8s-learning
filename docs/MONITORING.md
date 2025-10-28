@@ -197,7 +197,7 @@ rate(http_requests_total{status=~"5.."}[5m])
 
 ### 4. Sample Dashboard JSON
 
-A sample dashboard configuration will be added to `deployments/base/monitoring/dashboards/` for easy import.
+A sample dashboard configuration will be added to `grafana/dashboards/` for easy import.
 
 ## Querying Metrics
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-DASHBOARD_DIR="deployments/base/monitoring/dashboards"
+DASHBOARD_DIR="grafana/dashboards"
 NAMESPACE="monitoring"
 CONFIGMAP_NAME="grafana-dashboards"
 

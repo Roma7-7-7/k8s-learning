@@ -493,7 +493,7 @@ annotations:
 
 ### Grafana Dashboards
 
-- Create dashboard JSON files in `deployments/base/monitoring/dashboards/`
+- Create dashboard JSON files in `grafana/dashboards/`
 - Include panels for key metrics: latency, throughput, errors, resource usage
 - Use consistent color schemes and units
 - Add threshold lines for SLOs/SLAs

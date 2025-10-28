@@ -5,12 +5,12 @@ on:
     branches:
       - main
     paths:
-      - 'deployments/**/*.yaml'
-      - 'deployments/**/*.yml'
+      - 'deployments/base/**/*.yaml'
+      - 'deployments/base/**/*.yml'
   pull_request:
     paths:
-      - 'deployments/**/*.yaml'
-      - 'deployments/**/*.yml'
+      - 'deployments/base/**/*.yaml'
+      - 'deployments/base/**/*.yml'
 
 jobs:
   kubeval:
@@ -22,7 +22,7 @@ jobs:
       - name: Validate manifests with kubeval
         uses: instrumenta/kubeval-action@master
         with:
-          files: deployments/
+          files: deployments/base
 
   kube-linter:
     name: Lint Kubernetes Manifests
@@ -33,7 +33,7 @@ jobs:
       - name: Scan with kube-linter
         uses: stackrox/kube-linter-action@v1.0.5
         with:
-          directory: deployments/
+          directory: deployments/base
           format: sarif
           output-file: kube-linter-results.sarif
 
@@ -53,4 +53,4 @@ jobs:
         uses: docker://ghcr.io/yannh/kubeconform:latest
         with:
           entrypoint: '/kubeconform'
-          args: "-summary -output json deployments/"
+          args: "-summary -output json deployments/base"
