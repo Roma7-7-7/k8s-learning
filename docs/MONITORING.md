@@ -1,11 +1,13 @@
 # Monitoring Setup
 
-This project uses Prometheus for metrics collection and Grafana for visualization.
+This project uses Prometheus for metrics collection, Loki for log aggregation, and Grafana for visualization.
 
 ## Architecture
 
-- **Prometheus**: Collects metrics from API service, Kubernetes components, and nodes
-- **Grafana**: Provides dashboards for visualizing metrics
+- **Prometheus**: Collects metrics from services, Kubernetes components, and nodes
+- **Loki**: Aggregates logs from all pods in the k8s-learning namespace
+- **Promtail**: Agent that ships container logs to Loki
+- **Grafana**: Provides dashboards for visualizing metrics and logs
 - **Metrics Endpoint**: Each service exposes `/metrics` endpoint for Prometheus scraping
 
 ## Deployment
@@ -57,13 +59,30 @@ kubectl port-forward -n monitoring svc/prometheus 9090:9090
 
 Access at: http://localhost:9090
 
+### Loki
+
+Loki is accessible via ClusterIP:
+
+```bash
+# Port-forward using Makefile (forwards all services including Loki)
+make k8s-forward
+
+# Access Loki at: http://localhost:3100
+```
+
+**Loki API Endpoints:**
+- Health: http://localhost:3100/ready
+- Metrics: http://localhost:3100/metrics
+- Labels: http://localhost:3100/loki/api/v1/labels
+
 ### Monitoring Status
 
 Check the status of the monitoring stack:
 
 ```bash
 # Using Makefile
-make monitoring-status
+make monitoring-status    # Prometheus and Grafana status
+make logging-status       # Loki and Promtail status
 
 # Or manually
 kubectl get pods -n monitoring
@@ -254,6 +273,89 @@ sum(container_memory_working_set_bytes{namespace="k8s-learning"}) by (pod)
    kubectl logs -n monitoring deployment/prometheus
    ```
 
+## Log Aggregation with Loki
+
+### Overview
+
+Loki collects logs from all pods in the `k8s-learning` namespace using Promtail as the log shipping agent.
+
+### Configuration
+
+**Loki Configuration:**
+- Storage: Filesystem (schema v13 with TSDB index)
+- Log retention: 168 hours (7 days)
+- Volume histogram: Enabled for Grafana integration
+
+**Promtail Configuration:**
+- Scrapes logs from all pods in `k8s-learning` namespace
+- Parses JSON structured logs automatically
+- Extracts `level` label for filtering (INFO, DEBUG, ERROR, etc.)
+- Original JSON preserved for full field visibility in Grafana
+
+### Querying Logs
+
+**LogQL Query Examples:**
+
+```logql
+# All logs from k8s-learning namespace
+{namespace="k8s-learning"}
+
+# API service logs only
+{namespace="k8s-learning", app="api"}
+
+# Error logs only (using level label)
+{namespace="k8s-learning", level="ERROR"}
+
+# Search for specific text
+{namespace="k8s-learning"} |= "failed to process"
+
+# Errors with regex search
+{namespace="k8s-learning"} |~ "(?i)(error|fail|exception)"
+
+# Worker job processing logs
+{namespace="k8s-learning", app="worker"} |= "job"
+```
+
+### Dashboards
+
+The **Application Logs** dashboard provides:
+- Real-time log streaming with search
+- Log rate by application
+- Error count visualization
+- Dedicated error panels for API, Worker, and Controller
+- Log distribution by pod
+
+Access via Grafana → Dashboards → Application Logs
+
+### Troubleshooting Logs
+
+**Check Loki status:**
+```bash
+make logging-status
+
+# Or manually
+kubectl get pods -n monitoring -l app=loki
+kubectl logs -n monitoring -l app=loki
+```
+
+**Check Promtail status:**
+```bash
+kubectl get pods -n monitoring -l app=promtail
+kubectl logs -n monitoring -l app=promtail
+```
+
+**Test Loki API:**
+```bash
+# Port forward Loki
+kubectl port-forward -n monitoring svc/loki 3100:3100
+
+# Check health
+curl http://localhost:3100/ready
+
+# List available labels
+curl http://localhost:3100/loki/api/v1/labels
+```
+
 ## Cleanup
 
 To remove the monitoring stack:
@@ -266,10 +368,9 @@ kubectl delete -f deployments/base/monitoring/monitoring.yaml
 
 - [ ] Add persistent storage for Prometheus (currently uses emptyDir)
 - [ ] Add persistent storage for Grafana dashboards
+- [ ] Add persistent storage for Loki (currently uses emptyDir)
 - [ ] Add alerting rules via Alertmanager
-- [ ] Add metrics for Worker service
-- [ ] Add metrics for Controller service
-- [ ] Create pre-configured dashboards via ConfigMap
-- [ ] Add Grafana dashboard provisioning
+- [ ] Add log-based alerts in Loki
 - [ ] Set up long-term metrics storage (Thanos/Cortex)
+- [ ] Set up long-term log storage
 - [ ] Add application-level SLIs/SLOs
