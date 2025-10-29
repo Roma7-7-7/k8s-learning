@@ -23,6 +23,7 @@ jobs:
         uses: instrumenta/kubeval-action@master
         with:
           files: deployments/base
+          excluded_path_patterns: kustomization.yaml
 
   kube-linter:
     name: Lint Kubernetes Manifests
