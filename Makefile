@@ -231,6 +231,7 @@ k8s-forward:
 	@echo "  • Controller: http://localhost:8282 (metrics, health)"
 	@echo "  • Grafana:    http://localhost:3000 (admin/admin)"
 	@echo "  • Prometheus: http://localhost:9090"
+	@echo "  • Loki:       http://localhost:3100"
 	@echo ""
 	@echo "Press Ctrl+C to stop all port forwards"
 	@echo ""
@@ -240,6 +241,7 @@ k8s-forward:
 	kubectl port-forward -n $(K8S_NAMESPACE) svc/controller-metrics-service 8282:8080 & \
 	kubectl port-forward -n monitoring svc/grafana 3000:3000 & \
 	kubectl port-forward -n monitoring svc/prometheus 9090:9090 & \
+	kubectl port-forward -n monitoring svc/loki 3100:3100 & \
 	wait
 
 k8s-status:
@@ -287,6 +289,16 @@ monitoring-status:
 
 deploy-dashboards:
 	@./scripts/deploy-grafana-dashboards.sh
+
+logging-status:
+	@echo "=== Loki Status ==="
+	@kubectl get pods -l app=loki -n monitoring -o wide
+	@echo ""
+	@echo "=== Promtail Status ==="
+	@kubectl get pods -l app=promtail -n monitoring -o wide
+	@echo ""
+	@echo "=== Loki Service ==="
+	@kubectl get svc loki -n monitoring
 
 #
 # Development Helpers
